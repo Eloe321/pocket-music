@@ -419,20 +419,16 @@ public class Player : NSObject, AVAudioPlayerDelegate {
                                 }
                             }
                         }
-                    } else { //network or else (file, but not on ios...)
+                    } else if let url = ArtworkSource.url(path: imageMetas, type: imageMetasType) {
                         DispatchQueue.global().async {
-                            if let url = URL(string: imageMetas)  {
-                                if let data = try? Data.init(contentsOf: url), let image = UIImage(data: data) {
-                                    let artwork = MPMediaItemArtwork(boundsSize: image.size, requestHandler: { (_ size : CGSize) -> UIImage in
-                                        return image
-                                    })
-                                    DispatchQueue.main.async {
-                                        if(self.audioMetas == audioMetas){ //always the sam song ?
-                                            print(self.nowPlayingInfo.description)
-                                            
-                                            self.nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
-                                            MPNowPlayingInfoCenter.default().nowPlayingInfo = self.nowPlayingInfo
-                                        }
+                            if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+                                let artwork = MPMediaItemArtwork(boundsSize: image.size, requestHandler: { (_ size : CGSize) -> UIImage in
+                                    return image
+                                })
+                                DispatchQueue.main.async {
+                                    if(self.audioMetas == audioMetas){
+                                        self.nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
+                                        MPNowPlayingInfoCenter.default().nowPlayingInfo = self.nowPlayingInfo
                                     }
                                 }
                             }
