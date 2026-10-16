@@ -40,7 +40,8 @@ class MusicController extends ChangeNotifier {
   final Random _random;
   late final StreamSubscription<PlaybackEvent> _subscription;
   Future<void> _commands = SynchronousFuture<void>(null);
-  List<Song> _songs = [], _queue = [];
+  List<Song> _songs = [], _queue = [], _upNext = [], _upNextHistory = [];
+  Song? _activeUpNext;
   List<LocalPlaylist> _playlists = [];
   Set<String> _favorites = {};
   List<int> _shuffleBag = [], _history = [];
@@ -74,9 +75,14 @@ class MusicController extends ChangeNotifier {
   List<LocalPlaylist> get playlists => List.unmodifiable(_playlists);
   Set<String> get favorites => Set.unmodifiable(_favorites);
   List<Song> get queue => List.unmodifiable(_queue);
-  Song? get currentSong => _currentIndex >= 0 && _currentIndex < _queue.length
-      ? _queue[_currentIndex]
-      : null;
+  List<Song> get upNext => List.unmodifiable(_upNext);
+  Song? get activeUpNextSong => _activeUpNext;
+  bool get isPlayingUpNext => _activeUpNext != null;
+  Song? get currentSong =>
+      _activeUpNext ??
+      (_currentIndex >= 0 && _currentIndex < _queue.length
+          ? _queue[_currentIndex]
+          : null);
   int get currentIndex => _currentIndex;
   Duration get position => _position;
   Duration get duration => _actualDuration > Duration.zero
@@ -179,16 +185,25 @@ class MusicController extends ChangeNotifier {
       final byId = {for (final song in _songs) song.id: song};
       final ids = (saved?['queue'] as List? ?? []).whereType<String>().toList();
       _queue = ids.map((id) => byId[id]).whereType<Song>().toList();
+      _upNext = (saved?['upNext'] as List? ?? [])
+          .whereType<String>()
+          .map((id) => byId[id])
+          .whereType<Song>()
+          .toList();
+      _activeUpNext = byId[saved?['activeUpNextId'] as String?];
       final selectedId = saved?['currentSongId'] as String?;
+      final normalSelectedId =
+          (saved?['normalSongId'] as String?) ??
+          (_activeUpNext == null ? selectedId : null);
       final savedIndex = (saved?['currentIndex'] as num?)?.toInt();
       _currentIndex =
           savedIndex != null &&
               savedIndex >= 0 &&
               savedIndex < ids.length &&
-              ids[savedIndex] == selectedId &&
-              byId.containsKey(selectedId)
+              ids[savedIndex] == normalSelectedId &&
+              byId.containsKey(normalSelectedId)
           ? ids.take(savedIndex).where(byId.containsKey).length
-          : _queue.indexWhere((song) => song.id == selectedId);
+          : _queue.indexWhere((song) => song.id == normalSelectedId);
       if (_currentIndex < 0 && _queue.isNotEmpty) _currentIndex = 0;
       final milliseconds = (saved?['positionMs'] as num?)?.toInt() ?? 0;
       _position = currentSong?.id == selectedId
@@ -222,13 +237,22 @@ class MusicController extends ChangeNotifier {
       final oldIndex = _currentIndex;
       final byId = {for (final song in _songs) song.id: song};
       _queue = _queue.map((song) => byId[song.id]).whereType<Song>().toList();
-      _currentIndex = oldSong == null || !byId.containsKey(oldSong.id)
+      _upNext = _upNext.map((song) => byId[song.id]).whereType<Song>().toList();
+      _activeUpNext = _activeUpNext == null ? null : byId[_activeUpNext!.id];
+      _upNextHistory = _upNextHistory
+          .map((song) => byId[song.id])
+          .whereType<Song>()
+          .toList();
+      final oldNormal = oldIndex >= 0 && oldIndex < oldQueue.length
+          ? oldQueue[oldIndex]
+          : null;
+      _currentIndex = oldNormal == null || !byId.containsKey(oldNormal.id)
           ? -1
           : oldQueue
                 .take(oldIndex)
                 .where((song) => byId.containsKey(song.id))
                 .length;
-      if (_currentIndex < 0) {
+      if (oldSong == null || currentSong?.id != oldSong.id) {
         await _playback.stop();
         _isPlaying = false;
         _loaded = false;
@@ -292,6 +316,9 @@ class MusicController extends ChangeNotifier {
           return;
         }
         _queue = requested;
+        _upNext = [];
+        _upNextHistory = [];
+        _activeUpNext = null;
         _currentIndex = startIndex.clamp(0, _queue.length - 1);
         _position = Duration.zero;
         _resetShuffle();
@@ -381,6 +408,9 @@ class MusicController extends ChangeNotifier {
   Future<void> _stopAndClear() async {
     await _playback.stop();
     _queue = [];
+    _upNext = [];
+    _upNextHistory = [];
+    _activeUpNext = null;
     _currentIndex = -1;
     _loaded = false;
     _isPlaying = false;
@@ -399,20 +429,32 @@ class MusicController extends ChangeNotifier {
     if (completed) {
       _loaded = false;
     }
-    if (completed && _repeatMode == RepeatMode.one) {
+    if (_upNext.isNotEmpty) {
+      if (_activeUpNext != null) _upNextHistory.add(_activeUpNext!);
+      _activeUpNext = _upNext.removeAt(0);
+      _position = Duration.zero;
+      _error = null;
+      await _openCurrent(autoStart: true);
+      return;
+    }
+    if (completed && _repeatMode == RepeatMode.one && _activeUpNext == null) {
       _position = Duration.zero;
       await _openCurrent(autoStart: true);
       return;
     }
     int? nextIndex;
-    if (_shuffleEnabled && _queue.length > 1) {
+    if (_activeUpNext != null &&
+        _repeatMode == RepeatMode.one &&
+        _queue.isNotEmpty) {
+      nextIndex = _currentIndex;
+    } else if (_shuffleEnabled && _queue.length > 1) {
       if (_shuffleBag.isEmpty && _repeatMode == RepeatMode.all) {
         _resetShuffle(clearHistory: false);
       }
       if (_shuffleBag.isNotEmpty) nextIndex = _shuffleBag.removeLast();
     } else if (_currentIndex + 1 < _queue.length) {
       nextIndex = _currentIndex + 1;
-    } else if (_repeatMode == RepeatMode.all) {
+    } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
       nextIndex = 0;
     }
     if (nextIndex == null) {
@@ -421,6 +463,8 @@ class MusicController extends ChangeNotifier {
       if (_loaded) await _playback.seek(Duration.zero);
       return;
     }
+    _activeUpNext = null;
+    _upNextHistory = [];
     _history.add(_currentIndex);
     _currentIndex = nextIndex;
     _position = Duration.zero;
@@ -432,6 +476,17 @@ class MusicController extends ChangeNotifier {
     if (currentSong == null) return;
     if (_position > const Duration(seconds: 3)) {
       await _seek(Duration.zero);
+      await _persist();
+      return;
+    }
+    if (_activeUpNext != null) {
+      _upNext.insert(0, _activeUpNext!);
+      _activeUpNext = _upNextHistory.isEmpty
+          ? null
+          : _upNextHistory.removeLast();
+      _position = Duration.zero;
+      _error = null;
+      await _openCurrent(autoStart: true);
       await _persist();
       return;
     }
@@ -481,7 +536,7 @@ class MusicController extends ChangeNotifier {
     if (clearHistory) _history = [];
   }
 
-  Future<void> addToQueue(Song song) => _run(() async {
+  Future<void> addToUpNext(Song song) => _run(() async {
     if (!isLocalMediaPath(song.path)) {
       throw const FormatException('Local files only');
     }
@@ -492,22 +547,45 @@ class MusicController extends ChangeNotifier {
       _resetShuffle();
       await _openCurrent(autoStart: true);
     } else {
-      _queue.add(song);
+      _upNext.add(song);
     }
-    _resetShuffle();
     await _persist();
-  }, failure: 'The queue could not be updated. Try another file.');
+  }, failure: 'Up next could not be updated. Try another file.');
+  Future<void> addToQueue(Song song) => addToUpNext(song);
+  Future<void> removeFromUpNext(int index) => _run(() async {
+    if (index < 0 || index >= _upNext.length) return;
+    _upNext.removeAt(index);
+    await _persist();
+  });
+  Future<void> reorderUpNext(int oldIndex, int newIndex) => _run(() async {
+    if (oldIndex < 0 ||
+        oldIndex >= _upNext.length ||
+        newIndex < 0 ||
+        newIndex > _upNext.length) {
+      return;
+    }
+    if (newIndex > oldIndex) newIndex--;
+    _upNext.insert(newIndex, _upNext.removeAt(oldIndex));
+    await _persist();
+  });
   Future<void> removeFromQueue(int index) => _run(() async {
     if (index < 0 || index >= _queue.length) return;
     final wasPlaying = _isPlaying;
     final wasCurrent = index == _currentIndex;
     _queue.removeAt(index);
     if (_queue.isEmpty) {
-      await _stopAndClear();
+      _currentIndex = -1;
+      if (_activeUpNext == null && _upNext.isNotEmpty) {
+        _activeUpNext = _upNext.removeAt(0);
+        _position = Duration.zero;
+        await _openCurrent(autoStart: wasPlaying);
+      } else if (_activeUpNext == null) {
+        await _stopAndClear();
+      }
     } else {
       if (index < _currentIndex) _currentIndex--;
       if (_currentIndex >= _queue.length) _currentIndex = _queue.length - 1;
-      if (wasCurrent) {
+      if (wasCurrent && _activeUpNext == null) {
         _position = Duration.zero;
         await _openCurrent(autoStart: wasPlaying);
       }
@@ -662,6 +740,11 @@ class MusicController extends ChangeNotifier {
     'favorites': _favorites.toList(),
     'playlists': _playlists.map((p) => p.toJson()).toList(),
     'queue': _queue.map((s) => s.id).toList(),
+    'upNext': _upNext.map((s) => s.id).toList(),
+    'activeUpNextId': _activeUpNext?.id,
+    'normalSongId': _currentIndex >= 0 && _currentIndex < _queue.length
+        ? _queue[_currentIndex].id
+        : null,
     'currentSongId': currentSong?.id,
     'currentIndex': _currentIndex,
     'positionMs': _position.inMilliseconds,

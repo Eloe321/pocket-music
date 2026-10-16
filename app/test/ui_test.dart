@@ -176,6 +176,7 @@ void main() {
       await tester.tap(find.byTooltip('Show queue').last);
       await tester.pumpAndSettle();
       expect(find.text('Play queue'), findsOneWidget);
+      expect(find.textContaining('Up next'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -261,7 +262,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Play queue'), findsOneWidget);
   });
-  testWidgets('left swipe queues a song or plays it when idle', (tester) async {
+  testWidgets('left swipe adds to Up next or plays when idle', (tester) async {
     await controller.initialize();
     await tester.pumpWidget(PocketMusicApp(controller: controller));
     await tester.drag(find.byKey(const Key('song-b')), const Offset(-350, 0));
@@ -277,7 +278,16 @@ void main() {
     await tester.drag(find.byKey(const Key('song-c')), const Offset(-350, 0));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 20));
-    expect(controller.queue.last.id, 'c');
+    expect(controller.upNext.map((song) => song.id), ['c']);
+    expect(controller.queue.map((song) => song.id), ['b']);
     expect(controller.currentSong?.id, 'b');
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Up next · 1 waiting'), findsOneWidget);
+    expect(find.textContaining('0 waiting'), findsNothing);
+    expect(find.textContaining('Normal queue'), findsOneWidget);
+    await tester.runAsync(() => controller.playQueue([library.songs[1]]));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Up next'), findsNothing);
   });
 }

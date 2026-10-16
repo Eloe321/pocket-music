@@ -130,6 +130,58 @@ void main() {
     expect(controller.isPlaying, isTrue);
     expect(playback.opens, ['b']);
   });
+  test('Up next plays FIFO before resuming the normal queue', () async {
+    await controller.initialize();
+    await controller.playQueue(library.songs, startIndex: 0);
+    await controller.addToUpNext(song('x'));
+    await controller.addToUpNext(song('y'));
+    expect(controller.queue.map((s) => s.id), ['a', 'b', 'c']);
+    expect(controller.upNext.map((s) => s.id), ['x', 'y']);
+    expect(controller.currentSong?.id, 'a');
+    await controller.next();
+    expect(controller.currentSong?.id, 'x');
+    expect(controller.upNext.map((s) => s.id), ['y']);
+    await controller.next();
+    expect(controller.currentSong?.id, 'y');
+    await controller.next();
+    expect(controller.currentSong?.id, 'b');
+    expect(controller.upNext, isEmpty);
+    expect(controller.queue.map((s) => s.id), ['a', 'b', 'c']);
+  });
+  test('Up next has priority over shuffle and natural completion', () async {
+    await controller.initialize();
+    await controller.playQueue(library.songs);
+    await controller.toggleShuffle();
+    await controller.addToUpNext(song('x'));
+    playback.events.add(const PlaybackEvent(completed: true));
+    await controller.saveState();
+    expect(controller.currentSong?.id, 'x');
+    await controller.next();
+    expect(controller.currentSong?.id, isNot('x'));
+  });
+  test(
+    'pending and active Up next survive restart and are removable',
+    () async {
+      await controller.initialize();
+      await controller.playQueue(library.songs);
+      await controller.addToUpNext(song('b'));
+      await controller.addToUpNext(song('c'));
+      await controller.next();
+      final restored = MusicController(
+        library: library,
+        playback: FakePlayback(),
+        store: store,
+      );
+      await restored.initialize();
+      expect(restored.currentSong?.id, 'b');
+      expect(restored.upNext.map((s) => s.id), ['c']);
+      await restored.removeFromUpNext(0);
+      await restored.next();
+      expect(restored.currentSong?.id, 'b');
+      expect(restored.isPlaying, isTrue);
+      restored.dispose();
+    },
+  );
   test(
     'restoring a selected song prepares paused system media controls',
     () async {
@@ -145,6 +197,47 @@ void main() {
       expect(restoredPlayback.opens, ['b']);
       expect(restoredPlayback.playing, isFalse);
       restored.dispose();
+    },
+  );
+  test(
+    'repeat one yields to Up next, then returns to its normal song',
+    () async {
+      await controller.initialize();
+      await controller.playQueue(library.songs);
+      await controller.cycleRepeat();
+      await controller.cycleRepeat();
+      await controller.addToUpNext(song('b'));
+      playback.events.add(const PlaybackEvent(completed: true));
+      await controller.saveState();
+      expect(controller.currentSong?.id, 'b');
+      await controller.next();
+      expect(controller.currentSong?.id, 'a');
+    },
+  );
+  test('a new play queue clears pending Up next', () async {
+    await controller.initialize();
+    await controller.playQueue(library.songs);
+    await controller.addToUpNext(song('b'));
+    await controller.playQueue([song('c')]);
+    expect(controller.upNext, isEmpty);
+    expect(controller.currentSong?.id, 'c');
+  });
+  test(
+    'Up next can be reordered and removed without editing normal queue',
+    () async {
+      await controller.initialize();
+      await controller.playQueue(library.songs);
+      await controller.addToUpNext(song('b'));
+      await controller.addToUpNext(song('c'));
+      await controller.reorderUpNext(0, 2);
+      expect(controller.upNext.map((s) => s.id), ['c', 'b']);
+      await controller.removeFromUpNext(0);
+      expect(controller.upNext.map((s) => s.id), ['b']);
+      expect(controller.queue.map((s) => s.id), ['a', 'b', 'c']);
+      await controller.next();
+      expect(controller.currentSong?.id, 'b');
+      await controller.next();
+      expect(controller.currentSong?.id, 'b');
     },
   );
   test(

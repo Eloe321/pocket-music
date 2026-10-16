@@ -84,14 +84,14 @@ class SongTile extends StatelessWidget {
     direction: DismissDirection.endToStart,
     confirmDismiss: (_) async {
       final wasIdle = controller.currentSong == null;
-      await controller.addToQueue(song);
+      await controller.addToUpNext(song);
       if (context.mounted && controller.error == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               wasIdle
                   ? 'Playing ${song.title}'
-                  : 'Added ${song.title} to queue',
+                  : 'Added ${song.title} to Up next',
             ),
             duration: const Duration(seconds: 2),
           ),
@@ -108,7 +108,7 @@ class SongTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.queue_music_rounded, color: copper),
-          Text('Queue', style: TextStyle(color: copper)),
+          Text('Up next', style: TextStyle(color: copper)),
         ],
       ),
     ),
@@ -163,7 +163,7 @@ class SongMenu extends StatelessWidget {
         case 'favorite':
           controller.toggleFavorite(song);
         case 'queue':
-          controller.addToQueue(song);
+          controller.addToUpNext(song);
         case 'playlist':
           choosePlaylist(context, controller, song);
         case 'remove':
@@ -179,7 +179,7 @@ class SongMenu extends StatelessWidget {
               : 'Add to favorites',
         ),
       ),
-      const PopupMenuItem(value: 'queue', child: Text('Add to queue')),
+      const PopupMenuItem(value: 'queue', child: Text('Add to Up next')),
       const PopupMenuItem(value: 'playlist', child: Text('Add to playlist')),
       if (onRemove != null)
         const PopupMenuItem(
