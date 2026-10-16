@@ -36,8 +36,12 @@ sufficient disk space; `outputs/build-release.command` builds the ARM64 release 
 Connect an unlocked Android phone over a data cable, enable USB debugging, and accept
 its authorization prompt. Developer mode alone is insufficient. Android minimum API 24.
 
-For iOS, install Xcode and the iOS SDK, select a signing team, then build `Runner.xcworkspace`.
-iOS source targets version 15.0. No iOS build or runtime QA has been completed here.
+For iOS, use Xcode and the iOS SDK, select your Apple development team in
+`ios/Runner.xcworkspace`, then run `flutter build ios --release` with Xcode selected as
+the active developer directory. The local project currently records the signing team
+used for this phone; change it when building with another Apple account. iOS targets
+version 15.0. After installation, trust the developer profile in iPhone Settings if
+iOS requests it.
 
 ## Privacy
 
@@ -58,5 +62,11 @@ background survival, Bluetooth behavior, or lock-screen correctness.
 
 As of 16 October 2026, the release APK has been built and installed on an RMX3363 running
 Android 13. Queue order, shuffle, Next, local MP3 playback, media controls and persistence
-were checked on that phone. iOS remains unbuilt and untested because Xcode is unavailable.
-See the delivered QA.txt for evidence and remaining hardware limits.
+were checked on that phone. A signed release build was also installed and exercised on an
+iPhone 12 Pro Max running iOS 26.5. Three generated local MP3s were scanned and played;
+automatic advance, shuffle/repeat controls, the mini-player, queue priority,
+playlist creation and batch song selection were checked through iPhone Mirroring. The
+user confirmed the lock-screen media card and controls on the physical phone. The Files
+picker opened, but selecting a file from Files was not exercised because the phone had no
+audio file available there. Bluetooth controls and long background playback were not
+verified. The generated tracks and QA playlist were removed after testing.
