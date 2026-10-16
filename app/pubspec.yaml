@@ -1,0 +1,26 @@
+name: pocket_music
+description: A private offline music library for Android and iPhone.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+  flutter: '>=3.47.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  assets_audio_player:
+    path: ..
+  path_provider: 2.1.5
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+dependency_overrides:
+  # Conventional native plugins keep this legacy fork buildable with the
+  # installed Android SDK/NDK and avoid adding a separate native-assets toolchain.
+  path_provider_android: 2.2.17
+  path_provider_foundation: 2.4.2
+flutter:
+  uses-material-design: true

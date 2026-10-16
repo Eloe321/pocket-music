@@ -116,7 +116,8 @@ class NotificationService : Service() {
     }
 
     @RequiresApi(Build.VERSION_CODES.ECLAIR)
-    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) return START_NOT_STICKY
         if (intent.action == Intent.ACTION_MEDIA_BUTTON) {
             MediaButtonsReceiver.getMediaSessionCompat(applicationContext).let {
                 MediaButtonReceiver.handleIntent(it, intent)
@@ -245,11 +246,15 @@ class NotificationService : Service() {
 
         val callback = object: MediaSessionCompat.Callback() {
             override fun onPlay() {
-                player.askPlayOrPause()
+                if (!player.isPlaying) player.askPlayOrPause()
             }
 
             override fun onPause() {
-                player.askPlayOrPause()
+                if (player.isPlaying) player.askPlayOrPause()
+            }
+
+            override fun onStop() {
+                player.askStop()
             }
 
             override fun onSkipToPrevious() {
@@ -319,7 +324,7 @@ class NotificationService : Service() {
                                 1 -> it.setShowActionsInCompactView(0)
                                 2 -> it.setShowActionsInCompactView(0, 1)
                                 3 -> it.setShowActionsInCompactView(0, 1, 2)
-                                4 -> it.setShowActionsInCompactView(0, 1, 2, 3)
+                                4 -> it.setShowActionsInCompactView(0, 1, 2)
                                 else -> it.setShowActionsInCompactView()
                             }
                         }

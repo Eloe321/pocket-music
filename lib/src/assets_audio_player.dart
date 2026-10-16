@@ -415,6 +415,10 @@ class AssetsAudioPlayer {
   AssetsAudioPlayerErrorHandler?
   onErrorDo; // custom error Handler, default value in '_init'
 
+  /// Runs after natural playlist completion has stopped the native player.
+  /// An app that owns its queue can safely open the next item from this hook.
+  Future<void> Function()? onPlaylistFinished;
+
   final BehaviorSubject<double> _playSpeed = BehaviorSubject.seeded(1.0);
 
   ValueStream<double> get playSpeed => _playSpeed.stream;
@@ -926,6 +930,7 @@ class AssetsAudioPlayer {
     } else {
       _playlistFinished.add(true); // no next elements -> finished
       await stop();
+      await onPlaylistFinished?.call();
     }
   }
 

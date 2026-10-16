@@ -236,7 +236,8 @@ public class Player : NSObject, AVAudioPlayerDelegate {
          // added seekBar 
         if #available(iOS 9.1, *) {
             commandCenter.changePlaybackPositionCommand.isEnabled = true
-            commandCenter.changePlaybackPositionCommand.addTarget { event in
+            self.targets["seek"] = commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
+                guard let self = self else { return .commandFailed }
                 if let event = event as? MPChangePlaybackPositionCommandEvent {
                     let time = CMTime(seconds: event.positionTime, preferredTimescale: 1000000)
                     self.player?.seek(to: time)
@@ -248,14 +249,14 @@ public class Player : NSObject, AVAudioPlayerDelegate {
         // Add handler for Play Command
         commandCenter.playCommand.isEnabled = (self.notificationSettings ?? NotificationSettings()).playPauseEnabled
         self.targets["play"] = commandCenter.playCommand.addTarget { [unowned self] event in
-            self.invokeListenerPlayPause()
+            if !self.playing { self.invokeListenerPlayPause() }
             return .success
         }
         
         // Add handler for Pause Command
         commandCenter.pauseCommand.isEnabled = (self.notificationSettings ?? NotificationSettings()).playPauseEnabled
         self.targets["pause"] = commandCenter.pauseCommand.addTarget { [unowned self] event in
-            self.invokeListenerPlayPause()
+            if self.playing { self.invokeListenerPlayPause() }
             return .success
         }
         
@@ -304,6 +305,9 @@ public class Player : NSObject, AVAudioPlayerDelegate {
         }
         if let t = self.targets["next"] {
             commandCenter.nextTrackCommand.removeTarget(t)
+        }
+        if #available(iOS 9.1, *), let t = self.targets["seek"] {
+            commandCenter.changePlaybackPositionCommand.removeTarget(t)
         }
         self.targets.removeAll()
         

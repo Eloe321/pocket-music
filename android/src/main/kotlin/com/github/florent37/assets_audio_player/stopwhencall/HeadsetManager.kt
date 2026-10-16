@@ -68,8 +68,12 @@ class HeadsetManager(private val context: Context) {
             Intent.ACTION_HEADSET_PLUG
         }
 
-        context.registerReceiver(receiver, IntentFilter(action))
-        context.registerReceiver(receiver, IntentFilter(ACTION_AUDIO_BECOMING_NOISY))
+        val filter = IntentFilter(action).apply { addAction(ACTION_AUDIO_BECOMING_NOISY) }
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
 
         //will only work if the     <uses-permission android:name="android.permission.BLUETOOTH" /> is in the manifest
         try {

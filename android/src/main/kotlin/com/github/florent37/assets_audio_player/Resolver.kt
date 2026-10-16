@@ -29,6 +29,7 @@ class UriResolver(private val context: Context) {
 
     fun audioPath(uri: String?): String? {
         if(uri != null) {
+            if (uri.startsWith("content://")) return uri
             try {
                 if (uri.startsWith(PREFIX_CONTENT)) {
                     val uriParsed = Uri.parse(uri)

@@ -41,9 +41,16 @@ class MediaButtonsReceiver(context: Context, private val onAction: (MediaButtonA
     }
 
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
+        override fun onPlay() { onAction(MediaButtonAction.play) }
+        override fun onPause() { onAction(MediaButtonAction.pause) }
+        override fun onSkipToNext() { onAction(MediaButtonAction.next) }
+        override fun onSkipToPrevious() { onAction(MediaButtonAction.prev) }
+        override fun onStop() { onAction(MediaButtonAction.stop) }
         override fun onMediaButtonEvent(mediaButtonEvent: Intent?): Boolean {
             onIntentReceive(mediaButtonEvent)
-            return super.onMediaButtonEvent(mediaButtonEvent)
+            // We already routed this key. Calling super would dispatch it again
+            // through onPlay/onPause/onSkipToNext and double-toggle playback.
+            return mediaButtonEvent?.action == Intent.ACTION_MEDIA_BUTTON
         }
 
         override fun onSeekTo(pos: Long) {
@@ -58,9 +65,7 @@ class MediaButtonsReceiver(context: Context, private val onAction: (MediaButtonA
 
     private fun getAdjustedKeyCode(keyEvent: KeyEvent): Int {
         val keyCode = keyEvent.keyCode
-        return if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY || keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE) {
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-        } else keyCode
+        return keyCode
     }
 
     private fun mapAction(keyCode: Int): MediaButtonAction? {

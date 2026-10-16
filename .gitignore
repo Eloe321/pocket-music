@@ -111,6 +111,8 @@ unlinked_spec.ds
 
 # Coverage
 coverage/
+**/ios/Flutter/ephemeral/
+**/.swiftpm/
 
 # Symbols
 app.*.symbols
