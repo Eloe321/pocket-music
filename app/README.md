@@ -6,6 +6,10 @@ The application lives in `app/`; its audio dependency is the plugin in the paren
 Features include local songs, albums and artists, search, favorites, named playlists,
 a reorderable queue, play/pause, next/previous, seeking, shuffle, repeat, saved playback
 position, and native background/lock-screen controls. Restored sessions start paused.
+The queue pins the current song above the actual upcoming play order, including shuffle,
+and moves played tracks below it. Swiping a song right-to-left adds it to a separate
+Up next list that plays before the normal queue. A playlist's Add songs picker supports
+search and multiple selections in one action.
 
 Android scans MediaStore after audio permission and can import audio through the system
 file picker. Permission denial still permits private imports. iPhone imports through
@@ -26,9 +30,9 @@ flutter run -d DEVICE_ID
 flutter build apk --debug
 ```
 
-In the delivered workspace, `../../flutter-local` from `app/`
-wraps the installed SDK. The `outputs/run-android.command` launcher checks for a single
-authorized phone and sufficient disk space; `outputs/build-android.command` builds an APK.
+In the delivered workspace, `../../flutter-local` from `app/` wraps the installed SDK.
+The `outputs/run-android.command` launcher checks for a single authorized phone and
+sufficient disk space; `outputs/build-release.command` builds the ARM64 release APK.
 Connect an unlocked Android phone over a data cable, enable USB debugging, and accept
 its authorization prompt. Developer mode alone is insufficient. Android minimum API 24.
 
@@ -52,8 +56,7 @@ interactions. Screenshot fixtures use invented music metadata and no real audio.
 These tests do not establish native decoding, audible playback, permissions on hardware,
 background survival, Bluetooth behavior, or lock-screen correctness.
 
-As of 16 October 2026, native Android assembly is blocked by insufficient free disk space
-and missing cached Gradle dependencies. No authorized Android phone is visible to ADB.
-There is no APK yet and no phone MP3 has been accessed. iOS has syntax-only validation,
-not a build, because Xcode is unavailable. See the delivered QA.txt for evidence and
-remaining device acceptance checks.
+As of 16 October 2026, the release APK has been built and installed on an RMX3363 running
+Android 13. Queue order, shuffle, Next, local MP3 playback, media controls and persistence
+were checked on that phone. iOS remains unbuilt and untested because Xcode is unavailable.
+See the delivered QA.txt for evidence and remaining hardware limits.

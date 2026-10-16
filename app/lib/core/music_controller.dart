@@ -7,6 +7,19 @@ import 'platform_library.dart' show isLocalMediaPath;
 export 'models.dart';
 export 'ports.dart';
 
+class QueueEntry {
+  const QueueEntry(
+    this.song,
+    this.sourceIndex, {
+    this.isCurrent = false,
+    this.isPlayed = false,
+  });
+  final Song song;
+  final int sourceIndex;
+  final bool isCurrent;
+  final bool isPlayed;
+}
+
 class MusicController extends ChangeNotifier {
   MusicController({
     required LibraryPort library,
@@ -75,6 +88,41 @@ class MusicController extends ChangeNotifier {
   List<LocalPlaylist> get playlists => List.unmodifiable(_playlists);
   Set<String> get favorites => Set.unmodifiable(_favorites);
   List<Song> get queue => List.unmodifiable(_queue);
+  List<int> get _orderedRemaining {
+    final played = _history.toSet();
+    return [
+      for (var i = _currentIndex + 1; i < _queue.length; i++)
+        if (!played.contains(i)) i,
+    ];
+  }
+
+  List<int> get _upcomingIndices {
+    if (_currentIndex < 0 || _currentIndex >= _queue.length) return const [];
+    if (_shuffleEnabled) return _shuffleBag.reversed.toList();
+    final upcoming = _orderedRemaining;
+    if (upcoming.isEmpty && _repeatMode == RepeatMode.all) {
+      return [
+        for (var i = 0; i < _queue.length; i++)
+          if (i != _currentIndex) i,
+      ];
+    }
+    return upcoming;
+  }
+
+  List<QueueEntry> get displayQueue {
+    if (_queue.isEmpty) return const [];
+    final upcoming = _upcomingIndices;
+    final scheduled = {...upcoming, _currentIndex};
+    return List.unmodifiable([
+      if (_currentIndex >= 0 && _currentIndex < _queue.length)
+        QueueEntry(_queue[_currentIndex], _currentIndex, isCurrent: true),
+      for (final index in upcoming) QueueEntry(_queue[index], index),
+      for (var index = 0; index < _queue.length; index++)
+        if (!scheduled.contains(index))
+          QueueEntry(_queue[index], index, isPlayed: true),
+    ]);
+  }
+
   List<Song> get upNext => List.unmodifiable(_upNext);
   Song? get activeUpNextSong => _activeUpNext;
   bool get isPlayingUpNext => _activeUpNext != null;
@@ -209,7 +257,33 @@ class MusicController extends ChangeNotifier {
       _position = currentSong?.id == selectedId
           ? _clamp(Duration(milliseconds: milliseconds))
           : Duration.zero;
-      _resetShuffle();
+      final savedBag = (saved?['shuffleBag'] as List? ?? [])
+          .whereType<num>()
+          .map((n) => n.toInt())
+          .toList();
+      final savedHistory = (saved?['history'] as List? ?? [])
+          .whereType<num>()
+          .map((n) => n.toInt())
+          .toList();
+      final unchangedQueue =
+          ids.length == _queue.length &&
+          List.generate(
+            ids.length,
+            (i) => ids[i] == _queue[i].id,
+          ).every((same) => same);
+      final validOrder =
+          [
+            ...savedBag,
+            ...savedHistory,
+          ].every((i) => i >= 0 && i < _queue.length) &&
+          savedBag.toSet().length == savedBag.length &&
+          !savedBag.contains(_currentIndex);
+      if (unchangedQueue && validOrder && saved?['shuffleBag'] is List) {
+        _shuffleBag = savedBag;
+        _history = savedHistory;
+      } else {
+        _resetShuffle();
+      }
       if (selectedId != null && currentSong?.id == selectedId) {
         try {
           await _openCurrent(autoStart: false);
@@ -236,7 +310,16 @@ class MusicController extends ChangeNotifier {
       final oldQueue = List<Song>.of(_queue);
       final oldIndex = _currentIndex;
       final byId = {for (final song in _songs) song.id: song};
+      final indexMap = <int, int>{};
+      for (var i = 0; i < oldQueue.length; i++) {
+        if (byId.containsKey(oldQueue[i].id)) indexMap[i] = indexMap.length;
+      }
       _queue = _queue.map((song) => byId[song.id]).whereType<Song>().toList();
+      _history = _history.map((i) => indexMap[i]).whereType<int>().toList();
+      _shuffleBag = _shuffleBag
+          .map((i) => indexMap[i])
+          .whereType<int>()
+          .toList();
       _upNext = _upNext.map((song) => byId[song.id]).whereType<Song>().toList();
       _activeUpNext = _activeUpNext == null ? null : byId[_activeUpNext!.id];
       _upNextHistory = _upNextHistory
@@ -260,7 +343,11 @@ class MusicController extends ChangeNotifier {
         _actualDuration = Duration.zero;
         if (_queue.isNotEmpty) _currentIndex = 0;
       }
-      _resetShuffle();
+      if (oldSong == null || currentSong?.id != oldSong.id) {
+        _resetShuffle();
+      } else {
+        _shuffleBag.remove(_currentIndex);
+      }
       await _persist();
     },
     busy: true,
@@ -412,6 +499,8 @@ class MusicController extends ChangeNotifier {
     _upNextHistory = [];
     _activeUpNext = null;
     _currentIndex = -1;
+    _history = [];
+    _shuffleBag = [];
     _loaded = false;
     _isPlaying = false;
     _position = Duration.zero;
@@ -443,19 +532,23 @@ class MusicController extends ChangeNotifier {
       return;
     }
     int? nextIndex;
+    var newCycle = false;
     if (_activeUpNext != null &&
         _repeatMode == RepeatMode.one &&
         _queue.isNotEmpty) {
       nextIndex = _currentIndex;
     } else if (_shuffleEnabled && _queue.length > 1) {
       if (_shuffleBag.isEmpty && _repeatMode == RepeatMode.all) {
-        _resetShuffle(clearHistory: false);
+        _resetShuffle();
+        newCycle = true;
       }
       if (_shuffleBag.isNotEmpty) nextIndex = _shuffleBag.removeLast();
-    } else if (_currentIndex + 1 < _queue.length) {
-      nextIndex = _currentIndex + 1;
+    } else if (_orderedRemaining.isNotEmpty) {
+      nextIndex = _orderedRemaining.first;
     } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
+      _history.clear();
       nextIndex = 0;
+      newCycle = true;
     }
     if (nextIndex == null) {
       await _pause();
@@ -465,8 +558,13 @@ class MusicController extends ChangeNotifier {
     }
     _activeUpNext = null;
     _upNextHistory = [];
-    _history.add(_currentIndex);
+    if (!newCycle && nextIndex != _currentIndex) _history.add(_currentIndex);
     _currentIndex = nextIndex;
+    if (_shuffleEnabled &&
+        _shuffleBag.isEmpty &&
+        _repeatMode == RepeatMode.all) {
+      _resetShuffle();
+    }
     _position = Duration.zero;
     _error = null;
     await _openCurrent(autoStart: true);
@@ -491,6 +589,9 @@ class MusicController extends ChangeNotifier {
       return;
     }
     if (_shuffleEnabled && _history.isNotEmpty) {
+      if (!_shuffleBag.contains(_currentIndex)) _shuffleBag.add(_currentIndex);
+      _currentIndex = _history.removeLast();
+    } else if (_history.isNotEmpty) {
       _currentIndex = _history.removeLast();
     } else if (_currentIndex > 0) {
       _currentIndex--;
@@ -520,7 +621,7 @@ class MusicController extends ChangeNotifier {
   });
   Future<void> toggleShuffle() => _run(() async {
     _shuffleEnabled = !_shuffleEnabled;
-    _resetShuffle();
+    if (_shuffleEnabled) _resetShuffle(clearHistory: false);
     await _persist();
   });
   Future<void> cycleRepeat() => _run(() async {
@@ -529,11 +630,13 @@ class MusicController extends ChangeNotifier {
     await _persist();
   });
   void _resetShuffle({bool clearHistory = true}) {
-    _shuffleBag = List.generate(
-      _queue.length,
-      (index) => index,
-    ).where((index) => index != _currentIndex).toList()..shuffle(_random);
     if (clearHistory) _history = [];
+    final played = _history.toSet();
+    _shuffleBag =
+        List.generate(_queue.length, (index) => index)
+            .where((index) => index != _currentIndex && !played.contains(index))
+            .toList()
+          ..shuffle(_random);
   }
 
   Future<void> addToUpNext(Song song) => _run(() async {
@@ -572,8 +675,18 @@ class MusicController extends ChangeNotifier {
     if (index < 0 || index >= _queue.length) return;
     final wasPlaying = _isPlaying;
     final wasCurrent = index == _currentIndex;
+    _history = _history
+        .where((i) => i != index)
+        .map((i) => i > index ? i - 1 : i)
+        .toList();
+    _shuffleBag = _shuffleBag
+        .where((i) => i != index)
+        .map((i) => i > index ? i - 1 : i)
+        .toList();
     _queue.removeAt(index);
     if (_queue.isEmpty) {
+      _history = [];
+      _shuffleBag = [];
       _currentIndex = -1;
       if (_activeUpNext == null && _upNext.isNotEmpty) {
         _activeUpNext = _upNext.removeAt(0);
@@ -585,12 +698,15 @@ class MusicController extends ChangeNotifier {
     } else {
       if (index < _currentIndex) _currentIndex--;
       if (_currentIndex >= _queue.length) _currentIndex = _queue.length - 1;
+      if (wasCurrent) {
+        _history.remove(_currentIndex);
+        _shuffleBag.remove(_currentIndex);
+      }
       if (wasCurrent && _activeUpNext == null) {
         _position = Duration.zero;
         await _openCurrent(autoStart: wasPlaying);
       }
     }
-    _resetShuffle();
     await _persist();
   }, failure: 'The queue could not be updated. Try another file.');
   Future<void> reorderQueue(int oldIndex, int newIndex) => _run(() async {
@@ -613,6 +729,33 @@ class MusicController extends ChangeNotifier {
     _resetShuffle();
     await _persist();
   });
+  Future<void> reorderDisplayedQueue(int oldIndex, int newIndex) =>
+      _run(() async {
+        final upcoming = _upcomingIndices;
+        if (upcoming.length < 2) return;
+        final start = _currentIndex >= 0 ? 1 : 0;
+        final oldUpcoming = oldIndex - start;
+        final newUpcoming = (newIndex - start).clamp(0, upcoming.length - 1);
+        if (oldUpcoming < 0 ||
+            oldUpcoming >= upcoming.length ||
+            oldUpcoming == newUpcoming) {
+          return;
+        }
+        if (_shuffleEnabled) {
+          upcoming.insert(newUpcoming, upcoming.removeAt(oldUpcoming));
+          _shuffleBag = upcoming.reversed.toList();
+        } else {
+          final reorderedSongs = upcoming.map((i) => _queue[i]).toList();
+          reorderedSongs.insert(
+            newUpcoming,
+            reorderedSongs.removeAt(oldUpcoming),
+          );
+          for (var i = 0; i < upcoming.length; i++) {
+            _queue[upcoming[i]] = reorderedSongs[i];
+          }
+        }
+        await _persist();
+      });
   Future<void> toggleFavorite(Song song) => _run(() async {
     if (!_favorites.remove(song.id)) _favorites.add(song.id);
     await _persist();
@@ -747,6 +890,8 @@ class MusicController extends ChangeNotifier {
         : null,
     'currentSongId': currentSong?.id,
     'currentIndex': _currentIndex,
+    'shuffleBag': _shuffleBag,
+    'history': _history,
     'positionMs': _position.inMilliseconds,
     'shuffle': _shuffleEnabled,
     'repeat': _repeatMode.name,

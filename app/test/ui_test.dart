@@ -99,6 +99,7 @@ void main() {
   testWidgets('queue removal and drag reorder preserve the selected track', (
     tester,
   ) async {
+    library.songs.add(fixtures.song('d'));
     await controller.initialize();
     await tester.pumpWidget(PocketMusicApp(controller: controller));
     await tester.tap(find.byKey(const Key('song-a')));
@@ -122,7 +123,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await drag.up();
     await tester.pumpAndSettle();
-    expect(controller.queue.map((song) => song.id), ['c', 'b']);
+    expect(controller.queue.map((song) => song.id), ['b', 'd', 'c']);
     expect(controller.currentSong?.id, 'b');
     final downward = await tester.startGesture(
       tester.getCenter(find.byIcon(Icons.drag_handle_rounded).first),
@@ -134,10 +135,49 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await downward.up();
     await tester.pumpAndSettle();
-    expect(controller.queue.map((song) => song.id), ['b', 'c']);
+    expect(controller.queue.map((song) => song.id), ['b', 'c', 'd']);
     expect(controller.currentSong?.id, 'b');
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'queue sheet pins the playing song above upcoming and played songs',
+    (tester) async {
+      await controller.initialize();
+      await tester.runAsync(() async {
+        await controller.playQueue(library.songs);
+        await controller.next();
+      });
+      await tester.pumpWidget(PocketMusicApp(controller: controller));
+      await tester.tap(find.byKey(const Key('mini-player')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byTooltip('Show queue').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show queue').last);
+      await tester.pumpAndSettle();
+      final sheet = find.byType(BottomSheet);
+      final current = find.descendant(of: sheet, matching: find.text('Song b'));
+      final upcoming = find.descendant(
+        of: sheet,
+        matching: find.text('Song c'),
+      );
+      final played = find.descendant(of: sheet, matching: find.text('Song a'));
+      expect(
+        tester.getTopLeft(current).dy,
+        lessThan(tester.getTopLeft(upcoming).dy),
+      );
+      expect(
+        tester.getTopLeft(upcoming).dy,
+        lessThan(tester.getTopLeft(played).dy),
+      );
+      expect(
+        find.descendant(
+          of: sheet,
+          matching: find.textContaining('Playing now'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('empty library explains local access and offers file import', (
     tester,

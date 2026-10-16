@@ -381,74 +381,136 @@ Future<void> showQueue(
       height: MediaQuery.sizeOf(context).height * .78,
       child: ListenableBuilder(
         listenable: c,
-        builder: (context, _) => Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Play queue',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        if (c.isPlayingUpNext || c.upNext.isNotEmpty)
-                          const Text(
-                            'Up next plays before the normal queue',
-                            style: TextStyle(color: muted),
+        builder: (context, _) {
+          final displayedQueue = c.displayQueue;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Play queue',
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
-                      ],
+                          if (c.isPlayingUpNext || c.upNext.isNotEmpty)
+                            const Text(
+                              'Up next plays before the normal queue',
+                              style: TextStyle(color: muted),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close queue',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              if (c.isPlayingUpNext || c.upNext.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      c.upNext.isEmpty
+                          ? 'Up next'
+                          : 'Up next · ${c.upNext.length} waiting',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Close queue',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
+                ),
+                if (c.activeUpNextSong case final active?)
+                  ListTile(
+                    selected: true,
+                    leading: CoverArt(song: active, size: 44),
+                    title: Text(
+                      active.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: const Text('Playing from Up next'),
                   ),
-                ],
-              ),
-            ),
-            if (c.isPlayingUpNext || c.upNext.isNotEmpty) ...[
+                if (c.upNext.isNotEmpty)
+                  SizedBox(
+                    height: math.min(220.0, c.upNext.length * 72.0),
+                    child: ReorderableListView.builder(
+                      itemCount: c.upNext.length,
+                      buildDefaultDragHandles: false,
+                      onReorderItem: (oldIndex, newIndex) => c.reorderUpNext(
+                        oldIndex,
+                        newIndex > oldIndex ? newIndex + 1 : newIndex,
+                      ),
+                      itemBuilder: (context, index) {
+                        final song = c.upNext[index];
+                        return ListTile(
+                          key: ValueKey('up-next-${song.id}-$index'),
+                          leading: CoverArt(song: song, size: 44),
+                          title: Text(
+                            song.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            song.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Remove ${song.title} from Up next',
+                                onPressed: () => c.removeFromUpNext(index),
+                                icon: const Icon(Icons.close_rounded, size: 20),
+                              ),
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: Icon(Icons.drag_handle_rounded),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                const Divider(height: 12),
+              ],
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    c.upNext.isEmpty
-                        ? 'Up next'
-                        : 'Up next · ${c.upNext.length} waiting',
+                    'Normal queue · ${c.queue.length} songs',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
               ),
-              if (c.activeUpNextSong case final active?)
-                ListTile(
-                  selected: true,
-                  leading: CoverArt(song: active, size: 44),
-                  title: Text(
-                    active.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: const Text('Playing from Up next'),
-                ),
-              if (c.upNext.isNotEmpty)
-                SizedBox(
-                  height: math.min(220.0, c.upNext.length * 72.0),
+              if (c.queue.isEmpty)
+                const Expanded(
+                  child: Center(child: Text('Add a song to start your queue.')),
+                )
+              else
+                Expanded(
                   child: ReorderableListView.builder(
-                    itemCount: c.upNext.length,
+                    itemCount: displayedQueue.length,
+                    onReorderItem: c.reorderDisplayedQueue,
                     buildDefaultDragHandles: false,
-                    onReorderItem: (oldIndex, newIndex) => c.reorderUpNext(
-                      oldIndex,
-                      newIndex > oldIndex ? newIndex + 1 : newIndex,
-                    ),
                     itemBuilder: (context, index) {
-                      final song = c.upNext[index];
+                      final entry = displayedQueue[index];
+                      final song = entry.song;
                       return ListTile(
-                        key: ValueKey('up-next-${song.id}-$index'),
+                        key: ValueKey('queue-${song.id}-${entry.sourceIndex}'),
+                        selected: !c.isPlayingUpNext && entry.isCurrent,
                         leading: CoverArt(song: song, size: 44),
                         title: Text(
                           song.title,
@@ -456,100 +518,45 @@ Future<void> showQueue(
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          song.artist,
+                          entry.isCurrent && !c.isPlayingUpNext
+                              ? 'Playing now · ${song.artist}'
+                              : song.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => c.playQueue(
+                          List.of(c.queue),
+                          startIndex: entry.sourceIndex,
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              tooltip: 'Remove ${song.title} from Up next',
-                              onPressed: () => c.removeFromUpNext(index),
+                              tooltip: 'Remove ${song.title} from queue',
+                              onPressed: () =>
+                                  c.removeFromQueue(entry.sourceIndex),
                               icon: const Icon(Icons.close_rounded, size: 20),
                             ),
-                            ReorderableDragStartListener(
-                              index: index,
-                              child: const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Icon(Icons.drag_handle_rounded),
+                            if (!entry.isCurrent && !entry.isPlayed)
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: Icon(
+                                    Icons.drag_handle_rounded,
+                                    semanticLabel: 'Drag to reorder',
+                                  ),
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       );
                     },
                   ),
                 ),
-              const Divider(height: 12),
             ],
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Normal queue · ${c.queue.length} songs',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-            ),
-            if (c.queue.isEmpty)
-              const Expanded(
-                child: Center(child: Text('Add a song to start your queue.')),
-              )
-            else
-              Expanded(
-                child: ReorderableListView.builder(
-                  itemCount: c.queue.length,
-                  onReorderItem: (oldIndex, newIndex) => c.reorderQueue(
-                    oldIndex,
-                    newIndex > oldIndex ? newIndex + 1 : newIndex,
-                  ),
-                  buildDefaultDragHandles: false,
-                  itemBuilder: (context, index) {
-                    final song = c.queue[index];
-                    return ListTile(
-                      key: ValueKey('queue-${song.id}-$index'),
-                      selected: !c.isPlayingUpNext && index == c.currentIndex,
-                      leading: CoverArt(song: song, size: 44),
-                      title: Text(
-                        song.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        song.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () =>
-                          c.playQueue(List.of(c.queue), startIndex: index),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Remove ${song.title} from queue',
-                            onPressed: () => c.removeFromQueue(index),
-                            icon: const Icon(Icons.close_rounded, size: 20),
-                          ),
-                          ReorderableDragStartListener(
-                            index: index,
-                            child: const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: Icon(
-                                Icons.drag_handle_rounded,
-                                semanticLabel: 'Drag to reorder',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
+          );
+        },
       ),
     ),
   ),

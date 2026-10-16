@@ -148,6 +148,96 @@ void main() {
     expect(controller.upNext, isEmpty);
     expect(controller.queue.map((s) => s.id), ['a', 'b', 'c']);
   });
+  test(
+    'visible normal queue follows current, upcoming, then played songs',
+    () async {
+      await controller.initialize();
+      await controller.playQueue(library.songs);
+      expect(controller.displayQueue.map((entry) => entry.song.id), [
+        'a',
+        'b',
+        'c',
+      ]);
+      await controller.next();
+      expect(controller.displayQueue.map((entry) => entry.song.id), [
+        'b',
+        'c',
+        'a',
+      ]);
+      expect(controller.displayQueue.first.isCurrent, isTrue);
+      expect(controller.displayQueue.last.isPlayed, isTrue);
+      await controller.next();
+      expect(controller.displayQueue.map((entry) => entry.song.id), [
+        'c',
+        'a',
+        'b',
+      ]);
+    },
+  );
+  test('removing a queued song preserves the shuffled next order', () async {
+    library.songs.add(song('d'));
+    await controller.initialize();
+    await controller.playQueue(library.songs);
+    await controller.toggleShuffle();
+    await controller.next();
+    final before = controller.displayQueue
+        .map((entry) => entry.song.id)
+        .toList();
+    expect(before.last, 'a');
+    await controller.removeFromQueue(controller.displayQueue[2].sourceIndex);
+    expect(controller.displayQueue.map((entry) => entry.song.id), [
+      before[0],
+      before[1],
+      before[3],
+    ]);
+    await controller.next();
+    expect(controller.currentSong?.id, before[1]);
+  });
+  test(
+    'shuffle preview is the exact sequence used by Next and survives restart',
+    () async {
+      await controller.initialize();
+      await controller.playQueue(library.songs);
+      await controller.toggleShuffle();
+      final expected = controller.displayQueue
+          .map((entry) => entry.song.id)
+          .toList();
+      expect(expected.first, 'a');
+      final restored = MusicController(
+        library: library,
+        playback: FakePlayback(),
+        store: store,
+        random: Random(99),
+      );
+      await restored.initialize();
+      expect(restored.displayQueue.map((entry) => entry.song.id), expected);
+      for (final id in expected.skip(1)) {
+        await restored.next();
+        expect(restored.currentSong?.id, id);
+        expect(restored.displayQueue.first.song.id, id);
+      }
+      restored.dispose();
+    },
+  );
+  test(
+    'reordering a visible shuffled upcoming song changes playback',
+    () async {
+      await controller.initialize();
+      await controller.playQueue(library.songs);
+      await controller.toggleShuffle();
+      final before = controller.displayQueue
+          .map((entry) => entry.song.id)
+          .toList();
+      await controller.reorderDisplayedQueue(2, 1);
+      expect(controller.displayQueue.map((entry) => entry.song.id), [
+        before[0],
+        before[2],
+        before[1],
+      ]);
+      await controller.next();
+      expect(controller.currentSong?.id, before[2]);
+    },
+  );
   test('Up next has priority over shuffle and natural completion', () async {
     await controller.initialize();
     await controller.playQueue(library.songs);
@@ -350,6 +440,7 @@ void main() {
     expect(controller.isPlaying, isFalse);
     await controller.cycleRepeat();
     expect(controller.repeatMode, RepeatMode.all);
+    expect(controller.displayQueue[1].song.id, 'a');
     await controller.next();
     expect(controller.currentSong?.id, 'a');
   });
