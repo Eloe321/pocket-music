@@ -207,4 +207,77 @@ void main() {
     expect(find.text('Evening walk'), findsOneWidget);
     expect(controller.playlists.single.name, 'Evening walk');
   });
+  testWidgets('playlist picker keeps batch selections across searches', (
+    tester,
+  ) async {
+    await controller.initialize();
+    await controller.createPlaylist('Mix');
+    await tester.pumpWidget(PocketMusicApp(controller: controller));
+    await tester.tap(find.byKey(const Key('nav-playlists')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mix'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add songs'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('playlist-select-a')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('playlist-select-a')));
+    await tester.enterText(
+      find.byKey(const Key('playlist-song-search')),
+      'Song b',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('playlist-select-b')));
+    await tester.enterText(find.byKey(const Key('playlist-song-search')), '');
+    await tester.pumpAndSettle();
+    expect(find.text('Add 2 to playlist'), findsOneWidget);
+    await tester.tap(find.text('Add 2 to playlist'));
+    await tester.pumpAndSettle();
+    expect(controller.playlists.single.songIds, ['a', 'b']);
+  });
+  testWidgets('playlist create button shares the title row', (tester) async {
+    await controller.initialize();
+    await tester.pumpWidget(PocketMusicApp(controller: controller));
+    await tester.tap(find.byKey(const Key('nav-playlists')));
+    await tester.pumpAndSettle();
+    final title = tester.getRect(find.text('Your playlists'));
+    final add = tester.getRect(find.byTooltip('Create playlist'));
+    expect((title.center.dy - add.center.dy).abs(), lessThan(30));
+  });
+  testWidgets('mini player exposes shuffle, playback, next, and queue', (
+    tester,
+  ) async {
+    await controller.initialize();
+    await tester.pumpWidget(PocketMusicApp(controller: controller));
+    await tester.tap(find.byKey(const Key('song-a')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Ordered playback'), findsOneWidget);
+    await tester.tap(find.byTooltip('Ordered playback'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Shuffle on'), findsOneWidget);
+    expect(find.byTooltip('Pause'), findsOneWidget);
+    expect(find.byTooltip('Next track'), findsOneWidget);
+    expect(find.byTooltip('Show queue'), findsOneWidget);
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Play queue'), findsOneWidget);
+  });
+  testWidgets('left swipe queues a song or plays it when idle', (tester) async {
+    await controller.initialize();
+    await tester.pumpWidget(PocketMusicApp(controller: controller));
+    await tester.drag(find.byKey(const Key('song-b')), const Offset(-350, 0));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(controller.currentSong?.id, 'b');
+    expect(controller.isPlaying, isTrue);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('song-c')),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byKey(const Key('song-c')), const Offset(-350, 0));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(controller.queue.last.id, 'c');
+    expect(controller.currentSong?.id, 'b');
+  });
 }

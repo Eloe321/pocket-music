@@ -195,6 +195,14 @@ class MusicController extends ChangeNotifier {
           ? _clamp(Duration(milliseconds: milliseconds))
           : Duration.zero;
       _resetShuffle();
+      if (selectedId != null && currentSong?.id == selectedId) {
+        try {
+          await _openCurrent(autoStart: false);
+        } catch (_) {
+          _error =
+              'The selected song could not be prepared. Choose another song.';
+        }
+      }
       await _persist();
     },
     busy: true,
@@ -477,11 +485,18 @@ class MusicController extends ChangeNotifier {
     if (!isLocalMediaPath(song.path)) {
       throw const FormatException('Local files only');
     }
-    _queue.add(song);
-    if (_currentIndex < 0) _currentIndex = 0;
+    if (currentSong == null) {
+      _queue = [song];
+      _currentIndex = 0;
+      _position = Duration.zero;
+      _resetShuffle();
+      await _openCurrent(autoStart: true);
+    } else {
+      _queue.add(song);
+    }
     _resetShuffle();
     await _persist();
-  });
+  }, failure: 'The queue could not be updated. Try another file.');
   Future<void> removeFromQueue(int index) => _run(() async {
     if (index < 0 || index >= _queue.length) return;
     final wasPlaying = _isPlaying;
@@ -559,6 +574,18 @@ class MusicController extends ChangeNotifier {
           : p.copyWith(songIds: [...p.songIds, song.id]),
     ),
   );
+  Future<void> addSongsToPlaylist(String id, Iterable<Song> songs) {
+    final additions = songs.map((song) => song.id).toList();
+    return _run(
+      () => _editPlaylist(
+        id,
+        (playlist) => playlist.copyWith(
+          songIds: {...playlist.songIds, ...additions}.toList(),
+        ),
+      ),
+    );
+  }
+
   Future<void> removeFromPlaylist(String id, String songId) => _run(
     () => _editPlaylist(
       id,

@@ -33,8 +33,8 @@ class MiniPlayer extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
                 child: Row(
                   children: [
-                    CoverArt(song: song, size: 44),
-                    const SizedBox(width: 12),
+                    CoverArt(song: song, size: 40),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -55,8 +55,32 @@ class MiniPlayer extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: controller.shuffleEnabled
+                          ? 'Shuffle on'
+                          : 'Ordered playback',
+                      onPressed: controller.toggleShuffle,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 36,
+                        height: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      iconSize: 22,
+                      icon: Icon(
+                        controller.shuffleEnabled
+                            ? Icons.shuffle_rounded
+                            : Icons.format_list_numbered_rounded,
+                        color: controller.shuffleEnabled ? copper : muted,
+                      ),
+                    ),
+                    IconButton(
                       tooltip: controller.isPlaying ? 'Pause' : 'Play',
                       onPressed: controller.togglePlayPause,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 36,
+                        height: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      iconSize: 25,
                       icon: Icon(
                         controller.isPlaying
                             ? Icons.pause_rounded
@@ -67,7 +91,24 @@ class MiniPlayer extends StatelessWidget {
                     IconButton(
                       tooltip: 'Next track',
                       onPressed: controller.next,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 36,
+                        height: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      iconSize: 24,
                       icon: const Icon(Icons.skip_next_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Show queue',
+                      onPressed: () => showQueue(context, controller),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 36,
+                        height: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      iconSize: 22,
+                      icon: const Icon(Icons.queue_music_rounded),
                     ),
                   ],
                 ),

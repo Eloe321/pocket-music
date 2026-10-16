@@ -100,7 +100,8 @@ void main() {
     }
 
     await screenshot('pocket-music-library.png');
-    await tester.tap(find.byKey(const Key('mini-player')));
+    final mini = tester.getRect(find.byKey(const Key('mini-player')));
+    await tester.tapAt(mini.topLeft + const Offset(30, 30));
     await tester.pumpAndSettle();
     expect(find.text('Now playing'), findsOneWidget);
     expect(tester.takeException(), isNull);

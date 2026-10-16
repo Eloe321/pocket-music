@@ -79,35 +79,69 @@ class SongTile extends StatelessWidget {
   final List<Song> collection;
   final VoidCallback? onRemove;
   @override
-  Widget build(BuildContext context) => ListTile(
-    key: Key('song-${song.id}'),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-    leading: CoverArt(song: song),
-    selected: controller.currentSong?.id == song.id,
-    selectedTileColor: copper.withValues(alpha: .04),
-    title: Text(song.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-    subtitle: Text(
-      song.artist,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: const TextStyle(color: muted),
-    ),
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (MediaQuery.sizeOf(context).width > 360)
-          Text(
-            timeLabel(song.duration),
-            style: const TextStyle(
-              color: muted,
-              fontSize: 12,
-              fontFeatures: [FontFeature.tabularFigures()],
+  Widget build(BuildContext context) => Dismissible(
+    key: ValueKey('swipe-${song.id}'),
+    direction: DismissDirection.endToStart,
+    confirmDismiss: (_) async {
+      final wasIdle = controller.currentSong == null;
+      await controller.addToQueue(song);
+      if (context.mounted && controller.error == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              wasIdle
+                  ? 'Playing ${song.title}'
+                  : 'Added ${song.title} to queue',
             ),
+            duration: const Duration(seconds: 2),
           ),
-        SongMenu(song: song, controller: controller, onRemove: onRemove),
-      ],
+        );
+      }
+      return false;
+    },
+    background: const SizedBox.shrink(),
+    secondaryBackground: Container(
+      color: copper.withValues(alpha: .18),
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 28),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.queue_music_rounded, color: copper),
+          Text('Queue', style: TextStyle(color: copper)),
+        ],
+      ),
     ),
-    onTap: () => controller.playSong(song, from: collection),
+    child: ListTile(
+      key: Key('song-${song.id}'),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: CoverArt(song: song),
+      selected: controller.currentSong?.id == song.id,
+      selectedTileColor: copper.withValues(alpha: .04),
+      title: Text(song.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        song.artist,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: muted),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (MediaQuery.sizeOf(context).width > 360)
+            Text(
+              timeLabel(song.duration),
+              style: const TextStyle(
+                color: muted,
+                fontSize: 12,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          SongMenu(song: song, controller: controller, onRemove: onRemove),
+        ],
+      ),
+      onTap: () => controller.playSong(song, from: collection),
+    ),
   );
 }
 

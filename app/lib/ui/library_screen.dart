@@ -5,6 +5,7 @@ import '../core/music_controller.dart';
 import 'music_theme.dart';
 import 'song_widgets.dart';
 import 'now_playing.dart';
+import 'playlist_song_picker.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key, required this.controller});
@@ -136,13 +137,38 @@ class _LibraryScreenState extends State<LibraryScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            [
-                              'Your library',
-                              'Your favorites',
-                              'Your playlists',
-                            ][destination],
-                            style: Theme.of(context).textTheme.headlineLarge,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    [
+                                      'Your library',
+                                      'Your favorites',
+                                      'Your playlists',
+                                    ][destination],
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.headlineLarge,
+                                  ),
+                                ),
+                              ),
+                              if (destination == 2) ...[
+                                const SizedBox(width: 12),
+                                IconButton.filledTonal(
+                                  tooltip: 'Create playlist',
+                                  onPressed: () async {
+                                    final name = await playlistName(context);
+                                    if (name != null) {
+                                      await c.createPlaylist(name);
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add_rounded),
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 6),
                           Text(
@@ -190,22 +216,6 @@ class _LibraryScreenState extends State<LibraryScreen>
                                     ),
                                 ],
                               ),
-                            ),
-                          if (destination == 2)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                IconButton.filledTonal(
-                                  tooltip: 'Create playlist',
-                                  onPressed: () async {
-                                    final name = await playlistName(context);
-                                    if (name != null) {
-                                      await c.createPlaylist(name);
-                                    }
-                                  },
-                                  icon: const Icon(Icons.add_rounded),
-                                ),
-                              ],
                             ),
                         ],
                       ),
@@ -440,7 +450,7 @@ class _LibraryScreenState extends State<LibraryScreen>
           const Padding(
             padding: EdgeInsets.all(32),
             child: Text(
-              'A place for every mood.\nCreate a playlist, then add songs from their menus.',
+              'A place for every mood.\nCreate a playlist, then add songs together.',
               textAlign: TextAlign.center,
               style: TextStyle(color: muted, height: 1.8),
             ),
@@ -573,12 +583,32 @@ class CollectionPage extends StatelessWidget {
                     style: const TextStyle(color: muted),
                   ),
                   const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: collection.isEmpty
-                        ? null
-                        : () => c.playQueue(collection),
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Play'),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: collection.isEmpty
+                            ? null
+                            : () => c.playQueue(collection),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: const Text('Play'),
+                      ),
+                      if (list != null)
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => PlaylistSongPicker(
+                                controller: c,
+                                playlistId: list.id,
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('Add songs'),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -587,7 +617,7 @@ class CollectionPage extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Add songs from a song’s menu in your library.',
+                  'Use Add songs to build this playlist.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: muted),
                 ),

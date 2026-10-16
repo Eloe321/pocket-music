@@ -123,6 +123,45 @@ void main() {
     expect(playback.opens, isEmpty);
     expect(controller.isPlaying, isFalse);
   });
+  test('adding to an empty queue starts the chosen song', () async {
+    await controller.initialize();
+    await controller.addToQueue(library.songs[1]);
+    expect(controller.currentSong?.id, 'b');
+    expect(controller.isPlaying, isTrue);
+    expect(playback.opens, ['b']);
+  });
+  test(
+    'restoring a selected song prepares paused system media controls',
+    () async {
+      await controller.initialize();
+      await controller.playSong(library.songs[1]);
+      final restoredPlayback = FakePlayback();
+      final restored = MusicController(
+        library: library,
+        playback: restoredPlayback,
+        store: store,
+      );
+      await restored.initialize();
+      expect(restoredPlayback.opens, ['b']);
+      expect(restoredPlayback.playing, isFalse);
+      restored.dispose();
+    },
+  );
+  test(
+    'batch playlist add preserves selected order and skips duplicates',
+    () async {
+      await controller.initialize();
+      await controller.createPlaylist('Mix');
+      final id = controller.playlists.single.id;
+      await controller.addToPlaylist(id, library.songs[1]);
+      await controller.addSongsToPlaylist(id, [
+        library.songs[0],
+        library.songs[1],
+        library.songs[2],
+      ]);
+      expect(controller.playlists.single.songIds, ['b', 'a', 'c']);
+    },
+  );
   test(
     'permission denial is actionable and does not erase remembered files',
     () async {

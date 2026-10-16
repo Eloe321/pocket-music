@@ -93,7 +93,8 @@ class NotificationService : Service() {
                                 durationMs: Long,
                                 title: String? = null,
                                 artist: String? = null,
-                                album: String? = null
+                                album: String? = null,
+                                artwork: Bitmap? = null
         ) {
             val mediaSession = MediaButtonsReceiver.getMediaSessionCompat(context)
 
@@ -108,6 +109,11 @@ class NotificationService : Service() {
                     builder.putLong(MediaMetadata.METADATA_KEY_DURATION, C.TIME_UNSET)
                 } else {
                     builder.putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
+                }
+
+                if (artwork != null) {
+                    builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, artwork)
+                    builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork)
                 }
 
                 mediaSession.setMetadata(builder.build())
@@ -143,30 +149,26 @@ class NotificationService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.ECLAIR)
     private fun displayNotification(action: NotificationAction.Show) {
+        // Media controls must appear even when an artwork decoder stalls or
+        // returns no image. Upgrade the card when a bitmap becomes available.
+        displayNotification(action, null)
+        if (action.audioMetas.image == null && action.audioMetas.imageOnLoadError == null) return
         GlobalScope.launch(Dispatchers.Main) {
             val image = ImageDownloader.loadBitmap(context = applicationContext, imageMetas = action.audioMetas.image)
             if(image != null){
-                displayNotification(action, image) //display without image for now
+                displayNotification(action, image)
                 return@launch
             }
             val imageOnLoadError = ImageDownloader.loadBitmap(context = applicationContext, imageMetas = action.audioMetas.imageOnLoadError)
             if(imageOnLoadError != null){
-                displayNotification(action, imageOnLoadError) //display without image for now
+                displayNotification(action, imageOnLoadError)
                 return@launch
             }
-
-            val imageFromManifest = ImageDownloader.loadHolderBitmapFromManifest(context = applicationContext)
-            if(imageFromManifest != null){
-                displayNotification(action, imageFromManifest) //display without image for now
-                return@launch
-            }
-
-            displayNotification(action, null) //display without image
         }
     }
 
     private fun getSmallIcon(context: Context): Int {
-        return android.R.drawable.ic_media_play
+        return context.applicationInfo.icon.takeIf { it != 0 } ?: android.R.drawable.ic_media_play
     }
     
     private fun getPlayIcon(context: Context, resourceName: String?): Int {
@@ -230,7 +232,8 @@ class NotificationService : Service() {
                 title = action.audioMetas.title,
                 artist = action.audioMetas.artist,
                 album = action.audioMetas.album,
-                durationMs = action.durationMs
+                durationMs = action.durationMs,
+                artwork = bitmap
         )
 
         val toggleIntent = createReturnIntent(forAction = NotificationAction.ACTION_TOGGLE, forPlayer = action.playerId, audioMetas = action.audioMetas)
