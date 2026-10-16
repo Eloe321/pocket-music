@@ -111,6 +111,8 @@ unlinked_spec.ds
 
 # Coverage
 coverage/
+/app/build
+/app/android/.gradle
 **/ios/Flutter/ephemeral/
 **/.swiftpm/
 

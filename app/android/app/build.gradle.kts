@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "local.eloe.pocket_music"
     compileSdk = 36
+    ndkVersion = "27.1.12297006"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
