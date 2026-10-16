@@ -30,9 +30,9 @@ flutter run -d DEVICE_ID
 flutter build apk --debug
 ```
 
-In the delivered workspace, `../../flutter-local` from `app/` wraps the installed SDK.
-The `outputs/run-android.command` launcher checks for a single authorized phone and
-sufficient disk space; `outputs/build-release.command` builds the ARM64 release APK.
+The repository-root `scripts/build-android-release.sh` builds an installable APK and
+`scripts/install-android.sh` installs it on one authorized phone. You can point either
+script at a non-default Flutter installation with `FLUTTER_BIN=/path/to/flutter`.
 Connect an unlocked Android phone over a data cable, enable USB debugging, and accept
 its authorization prompt. Developer mode alone is insufficient. Android minimum API 24.
 
@@ -69,4 +69,6 @@ playlist creation and batch song selection were checked through iPhone Mirroring
 user confirmed the lock-screen media card and controls on the physical phone. The Files
 picker opened, but selecting a file from Files was not exercised because the phone had no
 audio file available there. Bluetooth controls and long background playback were not
-verified. The generated tracks and QA playlist were removed after testing.
+verified. The generated tracks and QA playlist were removed after testing. A later
+on-device pass verified embedded local artwork in the iPhone app, Control Center, and
+the lock-screen media card.
