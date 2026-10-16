@@ -326,7 +326,18 @@ void main() {
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Up next · 1 waiting'), findsOneWidget);
+    expect(find.byKey(const Key('queue-current-song')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('queue-current-song'))).dy,
+      lessThan(tester.getTopLeft(find.text('Up next · 1 waiting')).dy),
+    );
     expect(find.textContaining('0 waiting'), findsNothing);
+    expect(find.textContaining('Normal queue'), findsNothing);
+    await tester.runAsync(() => controller.next());
+    await tester.pumpAndSettle();
+    expect(controller.currentSong?.id, 'c');
+    expect(find.text('Up next · 0 waiting'), findsNothing);
+    expect(find.text('Playing from Up next · Artist c'), findsOneWidget);
     expect(find.textContaining('Normal queue'), findsOneWidget);
     await tester.runAsync(() => controller.playQueue([library.songs[1]]));
     await tester.pumpAndSettle();
