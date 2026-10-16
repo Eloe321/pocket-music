@@ -108,7 +108,7 @@ class SongTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.queue_music_rounded, color: copper),
-          Text('Up next', style: TextStyle(color: copper)),
+          Text('Play next', style: TextStyle(color: copper)),
         ],
       ),
     ),
@@ -179,7 +179,7 @@ class SongMenu extends StatelessWidget {
               : 'Add to favorites',
         ),
       ),
-      const PopupMenuItem(value: 'queue', child: Text('Add to Up next')),
+      const PopupMenuItem(value: 'queue', child: Text('Play next')),
       const PopupMenuItem(value: 'playlist', child: Text('Add to playlist')),
       if (onRemove != null)
         const PopupMenuItem(

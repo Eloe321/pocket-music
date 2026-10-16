@@ -58,6 +58,8 @@ void main() {
       await tester.pumpWidget(PocketMusicApp(controller: controller));
       await tester.tap(find.byTooltip('More options for Song a'));
       await tester.pumpAndSettle();
+      expect(find.text('Play next'), findsOneWidget);
+      expect(find.textContaining('Up next'), findsNothing);
       await tester.tap(find.text('Add to playlist'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Evening'));
