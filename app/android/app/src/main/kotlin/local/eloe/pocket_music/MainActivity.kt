@@ -2,6 +2,7 @@ package local.eloe.pocket_music
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,6 +14,11 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    override fun provideFlutterEngine(context: Context): FlutterEngine =
+        (application as PocketMusicApplication).getPlaybackEngine()
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
     private val worker = Executors.newSingleThreadExecutor()
     private var pendingScan: MethodChannel.Result? = null
     private var pendingImport: MethodChannel.Result? = null
@@ -59,6 +65,7 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        (application as PocketMusicApplication).startPlaybackEngine()
     }
 
     private fun scan(result: MethodChannel.Result, allowed: Boolean) {

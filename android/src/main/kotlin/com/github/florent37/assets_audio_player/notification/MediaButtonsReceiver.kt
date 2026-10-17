@@ -9,7 +9,7 @@ import android.support.v4.media.session.MediaSessionCompat.FLAG_HANDLES_MEDIA_BU
 import android.support.v4.media.session.PlaybackStateCompat
 import android.view.KeyEvent
 
-class MediaButtonsReceiver(context: Context, private val onAction: (MediaButtonAction) -> Unit, private val onNotifSeek: (Long) -> Unit) {
+class MediaButtonsReceiver(context: Context, private val onAction: (MediaControlRouter.Action) -> Unit, private val onNotifSeek: (Long) -> Unit) {
 
     companion object {
         var instance: MediaButtonsReceiver? = null
@@ -25,15 +25,13 @@ class MediaButtonsReceiver(context: Context, private val onAction: (MediaButtonA
             }
             return mediaSessionCompat!!
         }
-    }
 
-    enum class MediaButtonAction {
-        play, 
-        pause, 
-        playOrPause, 
-        next, 
-        prev, 
-        stop
+        fun actionFromIntent(intent: Intent?): MediaControlRouter.Action? {
+            if (intent?.action != Intent.ACTION_MEDIA_BUTTON) return null
+            val event = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT) ?: return null
+            if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) return null
+            return MediaControlRouter.actionForKeyCode(event.keyCode)
+        }
     }
 
     init {
@@ -41,16 +39,17 @@ class MediaButtonsReceiver(context: Context, private val onAction: (MediaButtonA
     }
 
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
-        override fun onPlay() { onAction(MediaButtonAction.play) }
-        override fun onPause() { onAction(MediaButtonAction.pause) }
-        override fun onSkipToNext() { onAction(MediaButtonAction.next) }
-        override fun onSkipToPrevious() { onAction(MediaButtonAction.prev) }
-        override fun onStop() { onAction(MediaButtonAction.stop) }
+        override fun onPlay() { onAction(MediaControlRouter.Action.PLAY) }
+        override fun onPause() { onAction(MediaControlRouter.Action.PAUSE) }
+        override fun onSkipToNext() { onAction(MediaControlRouter.Action.NEXT) }
+        override fun onSkipToPrevious() { onAction(MediaControlRouter.Action.PREVIOUS) }
+        override fun onStop() { onAction(MediaControlRouter.Action.STOP) }
         override fun onMediaButtonEvent(mediaButtonEvent: Intent?): Boolean {
-            onIntentReceive(mediaButtonEvent)
+            val action = actionFromIntent(mediaButtonEvent) ?: return super.onMediaButtonEvent(mediaButtonEvent)
+            onAction(action)
             // We already routed this key. Calling super would dispatch it again
             // through onPlay/onPause/onSkipToNext and double-toggle playback.
-            return mediaButtonEvent?.action == Intent.ACTION_MEDIA_BUTTON
+            return true
         }
 
         override fun onSeekTo(pos: Long) {
@@ -63,45 +62,12 @@ class MediaButtonsReceiver(context: Context, private val onAction: (MediaButtonA
         getMediaSessionCompat(context).setCallback(mediaSessionCallback)
     }
 
-    private fun getAdjustedKeyCode(keyEvent: KeyEvent): Int {
-        val keyCode = keyEvent.keyCode
-        return keyCode
-    }
-
-    private fun mapAction(keyCode: Int): MediaButtonAction? {
-        return when (keyCode) {
-            KeyEvent.KEYCODE_MEDIA_PLAY -> MediaButtonAction.play
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> MediaButtonAction.pause
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> MediaButtonAction.playOrPause
-            KeyEvent.KEYCODE_MEDIA_STOP -> MediaButtonAction.stop
-            KeyEvent.KEYCODE_MEDIA_NEXT -> MediaButtonAction.next
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> MediaButtonAction.prev
-            else -> null
-        }
-    }
-
     fun onIntentReceive(intent: Intent?) {
-        if (intent == null) {
-            return
-        }
-        if (intent.action != Intent.ACTION_MEDIA_BUTTON) {
-            return
-        }
-        (intent.extras?.get(Intent.EXTRA_KEY_EVENT) as? KeyEvent)
-                ?.takeIf { it.action == KeyEvent.ACTION_DOWN }
-                ?.let { getAdjustedKeyCode(it) }
-                ?.let { mapAction(it) }
-                ?.let { action ->
-                    handleMediaButton(action)
-                }
-
+        actionFromIntent(intent)?.let(onAction)
     }
 
     private fun seekPlayerTo(pos: Long) {
         this.onNotifSeek(pos)
     }
 
-    private fun handleMediaButton(action: MediaButtonAction) {
-        this.onAction(action)
-    }
 }

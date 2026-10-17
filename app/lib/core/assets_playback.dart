@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:assets_audio_player/assets_audio_player.dart';
+import 'package:flutter/foundation.dart';
 import 'models.dart';
 import 'ports.dart';
 import 'platform_library.dart' show isLocalMediaPath;
@@ -110,9 +111,11 @@ class AssetsPlayback implements PlaybackPort, RemotePlaybackPort {
         showNotification: true,
         playInBackground: PlayInBackground.enabled,
         headPhoneStrategy: HeadPhoneStrategy.pauseOnUnplug,
-        audioFocusStrategy: const AudioFocusStrategy.request(
-          resumeAfterInterruption: true,
-        ),
+        // Android can mix two media streams when we do not claim exclusive
+        // audio focus. iOS keeps its existing interruption behavior.
+        audioFocusStrategy: defaultTargetPlatform == TargetPlatform.android
+            ? AudioFocusStrategy.none()
+            : const AudioFocusStrategy.request(resumeAfterInterruption: true),
         loopMode: LoopMode.none,
         notificationSettings: NotificationSettings(
           nextEnabled: true,

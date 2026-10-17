@@ -13,6 +13,9 @@ The Flutter application is in [`app/`](app/). The repository also includes the m
 - Plays, seeks, shuffles, repeats, and remembers the queue and playback state.
 - Keeps a separate **Up next** list: swipe a song right-to-left to play it before the normal queue.
 - Shows the current track, play/pause, next, shuffle, and queue in the compact player.
+- Keeps search visible while scrolling the Android library.
+- Accepts Android media play/pause, next, and previous commands from the lock screen and compatible Bluetooth accessories.
+- Allows Android music to play alongside audio from other apps.
 - Supports Android notifications and lock screens, plus iPhone Control Center and lock-screen controls, including local embedded cover artwork.
 
 If an MP3 has no embedded cover image, Pocket Music shows its record placeholder. Your original music files are never changed or deleted.
@@ -71,6 +74,8 @@ git pull
 ```
 
 The existing build uses the Mac's local debug signing key for personal sideloading. Keep using the same Mac and do not uninstall the app if you want updates to preserve imports, playlists, and settings. For a distributable release, create and protect your own Android release keystore, configure it locally, and never commit it to Git.
+
+During playback, Android uses a media foreground service and keeps the player engine alive when the app screen is removed from Recents. Playback may still stop if the user force-stops the app or the phone's battery manager kills the process. Pocket Music does not override system-wide audio routing or call audio rules.
 
 You can also copy the APK to a phone and open it there. Android may ask you to allow installs from that file manager. An update must be signed with the same key as the installed app.
 

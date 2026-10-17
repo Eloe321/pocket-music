@@ -62,7 +62,7 @@ class NotificationService : Service() {
             MediaButtonsReceiver.getMediaSessionCompat(context).let { mediaSession ->
                 val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
                 val newState = PlaybackStateCompat.Builder()
-                        .setActions(PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SEEK_TO)
+                        .setActions(NotificationPlaybackActions.flags)
                         .setState(state, currentPositionMs, if (isPlaying) speed else 0f)
                         .build()
 
@@ -249,23 +249,38 @@ class NotificationService : Service() {
 
         val callback = object: MediaSessionCompat.Callback() {
             override fun onPlay() {
-                if (!player.isPlaying) player.askPlayOrPause()
+                dispatch(MediaControlRouter.Action.PLAY)
             }
 
             override fun onPause() {
-                if (player.isPlaying) player.askPlayOrPause()
+                dispatch(MediaControlRouter.Action.PAUSE)
             }
 
             override fun onStop() {
-                player.askStop()
+                dispatch(MediaControlRouter.Action.STOP)
             }
 
             override fun onSkipToPrevious() {
-                player.prev()
+                dispatch(MediaControlRouter.Action.PREVIOUS)
             }
 
             override fun onSkipToNext() {
-                player.next()
+                dispatch(MediaControlRouter.Action.NEXT)
+            }
+
+            override fun onMediaButtonEvent(mediaButtonEvent: Intent?): Boolean {
+                val command = MediaButtonsReceiver.actionFromIntent(mediaButtonEvent)
+                    ?: return super.onMediaButtonEvent(mediaButtonEvent)
+                dispatch(command)
+                return true
+            }
+
+            private fun dispatch(command: MediaControlRouter.Action) {
+                MediaControlRouter.dispatch(command, player.isPlaying,
+                    toggle = player::askPlayOrPause,
+                    next = player::next,
+                    previous = player::prev,
+                    stop = player::askStop)
             }
 
             override fun onSeekTo(pos: Long) {
@@ -395,7 +410,10 @@ class NotificationService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.ECLAIR)
     override fun onTaskRemoved(rootIntent: Intent) {
-        hideNotif()
+        PlaybackServiceLifecycle.onTaskRemoved(
+            isPlaying = AssetsAudioPlayerPlugin.instance?.assetsAudioPlayer?.hasOngoingPlayback() == true,
+            stopService = ::hideNotif,
+        )
     }
 
     override fun onCreate() {

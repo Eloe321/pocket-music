@@ -63,6 +63,7 @@ void main() {
       expect(args['seek'], 12000);
       expect(args['displayNotification'], isTrue);
       expect(args['headPhoneStrategy'], 'pauseOnUnplug');
+      expect((args['audioFocusStrategy'] as Map)['request'], isFalse);
       expect(args['song.title'], 'Title');
     },
   );

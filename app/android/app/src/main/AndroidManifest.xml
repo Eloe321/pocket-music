@@ -6,7 +6,7 @@
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:usesCleartextTraffic="false"
-        android:name="${applicationName}"
+        android:name=".PocketMusicApplication"
         android:icon="@drawable/ic_pocket_music">
         <activity
             android:name=".MainActivity"

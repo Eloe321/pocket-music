@@ -9,6 +9,8 @@ import android.view.KeyEvent
 import androidx.annotation.NonNull
 import com.github.florent37.assets_audio_player.headset.HeadsetStrategy
 import com.github.florent37.assets_audio_player.notification.*
+import com.github.florent37.assets_audio_player.notification.fetchAudioMetas
+import com.github.florent37.assets_audio_player.notification.fetchNotificationSettings
 import com.github.florent37.assets_audio_player.playerimplem.PlayerFinder
 import com.github.florent37.assets_audio_player.stopwhencall.AudioFocusStrategy
 import com.github.florent37.assets_audio_player.stopwhencall.HeadsetManager
@@ -173,6 +175,8 @@ class AssetsAudioPlayer(
     fun getPlayer(id: String): Player? {
         return this.players[id]
     }
+
+    fun hasOngoingPlayback(): Boolean = players.values.any { it.isPlaying }
 
     private fun getOrCreatePlayer(id: String): Player {
         return players.getOrPut(id) {
@@ -558,19 +562,16 @@ class AssetsAudioPlayer(
         this.lastPlayerIdWithNotificationEnabled = playerId
     }
 
-    fun onMediaButton(action: MediaButtonsReceiver.MediaButtonAction) {
+    fun onMediaButton(action: MediaControlRouter.Action) {
         lastPlayerIdWithNotificationEnabled
                 ?.let {
                     getPlayer(it)
                 }?.let { player ->
-                    when (action) {
-                        MediaButtonsReceiver.MediaButtonAction.play -> player.askPlayOrPause()
-                        MediaButtonsReceiver.MediaButtonAction.pause -> player.askPlayOrPause()
-                        MediaButtonsReceiver.MediaButtonAction.playOrPause -> player.askPlayOrPause()
-                        MediaButtonsReceiver.MediaButtonAction.next -> player.next()
-                        MediaButtonsReceiver.MediaButtonAction.prev -> player.prev()
-                        MediaButtonsReceiver.MediaButtonAction.stop -> player.askStop()
-                    }
+                    MediaControlRouter.dispatch(action, player.isPlaying,
+                            toggle = player::askPlayOrPause,
+                            next = player::next,
+                            previous = player::prev,
+                            stop = player::askStop)
                 }
     }
 

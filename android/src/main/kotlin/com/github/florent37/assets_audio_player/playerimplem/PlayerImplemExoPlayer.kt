@@ -253,6 +253,7 @@ class PlayerImplemExoPlayer(
         try {
             mediaPlayer = ExoPlayer.Builder(context)
                     .incrementBufferSize(audioType)
+                    .setWakeMode(C.WAKE_MODE_LOCAL)
                     .build()
 
             val mediaSource = getDataSource(

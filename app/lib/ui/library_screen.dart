@@ -125,6 +125,29 @@ class _LibraryScreenState extends State<LibraryScreen>
                   ),
                 ],
               ),
+            if (destination != 2)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
+                child: TextField(
+                  key: const Key('library-search'),
+                  controller: search,
+                  onChanged: c.setSearchQuery,
+                  decoration: InputDecoration(
+                    hintText: 'Search songs, artists, albums',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              search.clear();
+                              c.setSearchQuery('');
+                            },
+                          ),
+                  ),
+                ),
+              ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () => c.scan(requestPermission: false),
@@ -178,26 +201,6 @@ class _LibraryScreenState extends State<LibraryScreen>
                             style: const TextStyle(color: muted),
                           ),
                           const SizedBox(height: 22),
-                          if (destination != 2)
-                            TextField(
-                              key: const Key('library-search'),
-                              controller: search,
-                              onChanged: c.setSearchQuery,
-                              decoration: InputDecoration(
-                                hintText: 'Search songs, artists, albums',
-                                prefixIcon: const Icon(Icons.search_rounded),
-                                suffixIcon: search.text.isEmpty
-                                    ? null
-                                    : IconButton(
-                                        tooltip: 'Clear search',
-                                        icon: const Icon(Icons.close_rounded),
-                                        onPressed: () {
-                                          search.clear();
-                                          c.setSearchQuery('');
-                                        },
-                                      ),
-                              ),
-                            ),
                           if (destination == 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 16),

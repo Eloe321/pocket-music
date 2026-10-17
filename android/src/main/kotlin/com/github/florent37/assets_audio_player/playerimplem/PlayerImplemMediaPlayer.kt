@@ -3,6 +3,7 @@ package com.github.florent37.assets_audio_player.playerimplem
 import android.content.Context
 import android.media.MediaPlayer
 import android.media.MediaPlayer.*
+import android.os.PowerManager
 import android.net.Uri
 import android.util.Log
 import com.github.florent37.assets_audio_player.AssetAudioPlayerThrowable
@@ -120,7 +121,9 @@ class PlayerImplemMediaPlayer(
         suspendCoroutine<DurationMS> { continuation ->
             var onThisMediaReady = false
 
-            this@PlayerImplemMediaPlayer.mediaPlayer = MediaPlayer()
+            this@PlayerImplemMediaPlayer.mediaPlayer = MediaPlayer().apply {
+                setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
+            }
 
             when (audioType) {
                 Player.AUDIO_TYPE_NETWORK, Player.AUDIO_TYPE_LIVESTREAM -> {

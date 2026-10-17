@@ -200,6 +200,18 @@ void main() {
     expect(find.byKey(const Key('song-b')), findsOneWidget);
     expect(find.byKey(const Key('song-a')), findsNothing);
   });
+  testWidgets('library search stays visible while browsing songs', (tester) async {
+    library.songs.addAll([
+      for (var i = 0; i < 35; i++) fixtures.song('extra-$i'),
+    ]);
+    await controller.initialize();
+    await tester.pumpWidget(PocketMusicApp(controller: controller));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -900));
+    await tester.pumpAndSettle();
+    final searchField = find.byKey(const Key('library-search'));
+    expect(searchField, findsOneWidget);
+    expect(tester.getTopLeft(searchField).dy, lessThan(230));
+  });
   testWidgets(
     'song opens a mini-player and a full player with queue controls',
     (tester) async {
@@ -315,8 +327,13 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const Key('song-c')),
       150,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find.descendant(
+        of: find.byType(ListView).first,
+        matching: find.byType(Scrollable),
+      ).first,
     );
+    await tester.drag(find.byType(ListView).first, const Offset(0, -180));
+    await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('song-c')), const Offset(-350, 0));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 20));
@@ -341,6 +358,12 @@ void main() {
     expect(find.textContaining('Normal queue'), findsOneWidget);
     await tester.runAsync(() => controller.playQueue([library.songs[1]]));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Up next'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.textContaining('Up next'),
+      ),
+      findsNothing,
+    );
   });
 }
