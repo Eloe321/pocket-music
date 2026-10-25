@@ -176,7 +176,8 @@ class AssetsAudioPlayer(
         return this.players[id]
     }
 
-    fun hasOngoingPlayback(): Boolean = players.values.any { it.isPlaying }
+    fun hasOngoingPlayback(): Boolean = players.values.any { it.isPlaybackActive }
+    fun hasNotificationPlayer(): Boolean = lastPlayerIdWithNotificationEnabled?.let { players.containsKey(it) } == true
 
     private fun getOrCreatePlayer(id: String): Player {
         return players.getOrPut(id) {
@@ -234,6 +235,8 @@ class AssetsAudioPlayer(
                 onNotificationPlayOrPause = {
                     channel.invokeMethod(METHOD_PLAY_OR_PAUSE, null)
                 }
+                onNotificationPlay = { channel.invokeMethod("player.play", null) }
+                onNotificationPause = { channel.invokeMethod("player.pause", null) }
                 onNotificationStop = {
                     channel.invokeMethod(METHOD_NOTIFICATION_STOP, null)
                 }
@@ -571,7 +574,9 @@ class AssetsAudioPlayer(
                             toggle = player::askPlayOrPause,
                             next = player::next,
                             previous = player::prev,
-                            stop = player::askStop)
+                            stop = player::askStop,
+                            play = player::askPlay,
+                            pause = player::askPause)
                 }
     }
 

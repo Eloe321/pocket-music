@@ -11,14 +11,16 @@ import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.media.session.MediaButtonReceiver
 import com.google.android.exoplayer2.C
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import android.app.PendingIntent.FLAG_UPDATE_CURRENT
@@ -30,6 +32,12 @@ import com.github.florent37.assets_audio_player.AssetsAudioPlayerPlugin
 import com.github.florent37.assets_audio_player.R
 
 class NotificationService : Service() {
+    private val notificationScope = MainScope()
+    private val updateGuard = NotificationUpdateGuard()
+    private var artworkJob: Job? = null
+    private var isForeground = false
+    private var currentArtwork: ImageMetas? = null
+    private var currentBitmap: Bitmap? = null
 
     companion object {
         const val NOTIFICATION_ID = 1
@@ -125,6 +133,10 @@ class NotificationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) return START_NOT_STICKY
         if (intent.action == Intent.ACTION_MEDIA_BUTTON) {
+            if (AssetsAudioPlayerPlugin.instance?.assetsAudioPlayer?.hasNotificationPlayer() != true) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
             MediaButtonsReceiver.getMediaSessionCompat(applicationContext).let {
                 MediaButtonReceiver.handleIntent(it, intent)
             }
@@ -149,20 +161,27 @@ class NotificationService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.ECLAIR)
     private fun displayNotification(action: NotificationAction.Show) {
-        // Media controls must appear even when an artwork decoder stalls or
-        // returns no image. Upgrade the card when a bitmap becomes available.
-        displayNotification(action, null)
+        if (AssetsAudioPlayerPlugin.instance?.assetsAudioPlayer?.getPlayer(action.playerId) == null) {
+            hideNotif()
+            return
+        }
+        val revision = updateGuard.next()
+        artworkJob?.cancel()
+        if (currentArtwork != action.audioMetas.image) {
+            currentArtwork = action.audioMetas.image
+            currentBitmap = null
+        }
+        // State and lifecycle update synchronously. Decoding artwork can only
+        // enhance this same revision, never replay an old pause or old track.
+        displayNotification(action, currentBitmap, updateLifecycle = true)
+        if (currentBitmap != null) return
         if (action.audioMetas.image == null && action.audioMetas.imageOnLoadError == null) return
-        GlobalScope.launch(Dispatchers.Main) {
+        artworkJob = notificationScope.launch {
             val image = ImageDownloader.loadBitmap(context = applicationContext, imageMetas = action.audioMetas.image)
-            if(image != null){
-                displayNotification(action, image)
-                return@launch
-            }
-            val imageOnLoadError = ImageDownloader.loadBitmap(context = applicationContext, imageMetas = action.audioMetas.imageOnLoadError)
-            if(imageOnLoadError != null){
-                displayNotification(action, imageOnLoadError)
-                return@launch
+            val bitmap = image ?: ImageDownloader.loadBitmap(context = applicationContext, imageMetas = action.audioMetas.imageOnLoadError)
+            if (bitmap != null && updateGuard.isCurrent(revision)) {
+                currentBitmap = bitmap
+                displayNotification(action, bitmap, updateLifecycle = false)
             }
         }
     }
@@ -220,7 +239,7 @@ class NotificationService : Service() {
     }
 
     @RequiresApi(Build.VERSION_CODES.ECLAIR)
-    private fun displayNotification(action: NotificationAction.Show, bitmap: Bitmap?) {
+    private fun displayNotification(action: NotificationAction.Show, bitmap: Bitmap?, updateLifecycle: Boolean) {
         createNotificationChannel()
         val mediaSession = MediaButtonsReceiver.getMediaSessionCompat(applicationContext)
 
@@ -280,7 +299,9 @@ class NotificationService : Service() {
                     toggle = player::askPlayOrPause,
                     next = player::next,
                     previous = player::prev,
-                    stop = player::askStop)
+                    stop = player::askStop,
+                    play = player::askPlay,
+                    pause = player::askPause)
             }
 
             override fun onSeekTo(pos: Long) {
@@ -355,6 +376,7 @@ class NotificationService : Service() {
                 .setContentTitle(action.audioMetas.title)
                 .setContentText(action.audioMetas.artist)
                 .setOnlyAlertOnce(true)
+                .setOngoing(action.isPlaying)
                 .also {
                     if (!action.audioMetas.album.isNullOrEmpty()) {
                         it.setSubText(action.audioMetas.album)
@@ -370,15 +392,33 @@ class NotificationService : Service() {
                 .setShowWhen(false)
                 .build()
 
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIFICATION_ID, notification, FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        val manager = NotificationManagerCompat.from(applicationContext)
+        if (!updateLifecycle) {
+            manager.notify(NOTIFICATION_ID, notification)
+            return
         }
-
-        //fix for https://github.com/florent37/Flutter-AssetsAudioPlayer/issues/139
-        if (!action.isPlaying && Build.VERSION.SDK_INT >= 24) {
-           stopForeground(STOP_FOREGROUND_DETACH)
+        try {
+            isForeground = PlaybackServiceLifecycle.publishNotification(
+                isPlaying = action.isPlaying,
+                isForeground = isForeground,
+                promote = {
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        startForeground(NOTIFICATION_ID, notification, FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                    } else {
+                        startForeground(NOTIFICATION_ID, notification)
+                    }
+                },
+                notify = { manager.notify(NOTIFICATION_ID, notification) },
+                demote = { stopForeground(STOP_FOREGROUND_DETACH) },
+            )
+        } catch (error: IllegalStateException) {
+            // Android can reject a background restart after a system stop.
+            // Keep the process and controls recoverable instead of crashing.
+            Log.w(MEDIA_SESSION_TAG, "Playback service promotion rejected", error)
+            manager.notify(NOTIFICATION_ID, notification)
+            // Also discharge startForegroundService's promotion deadline.
+            stopSelf()
+            player.pause()
         }
 
     }
@@ -403,6 +443,9 @@ class NotificationService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.ECLAIR)
     private fun hideNotif() {
+        updateGuard.invalidate()
+        artworkJob?.cancel()
+        isForeground = false
         NotificationManagerCompat.from(applicationContext).cancel(NOTIFICATION_ID)
         stopForeground(true)
         stopSelf()
@@ -425,6 +468,9 @@ class NotificationService : Service() {
     }
 
     override fun onDestroy() {
+        updateGuard.invalidate()
+        notificationScope.cancel()
+        isForeground = false
         super.onDestroy()
     }
 

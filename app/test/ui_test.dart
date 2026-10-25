@@ -200,13 +200,18 @@ void main() {
     expect(find.byKey(const Key('song-b')), findsOneWidget);
     expect(find.byKey(const Key('song-a')), findsNothing);
   });
-  testWidgets('library search stays visible while browsing songs', (tester) async {
+  testWidgets('library search stays visible while browsing songs', (
+    tester,
+  ) async {
     library.songs.addAll([
       for (var i = 0; i < 35; i++) fixtures.song('extra-$i'),
     ]);
     await controller.initialize();
     await tester.pumpWidget(PocketMusicApp(controller: controller));
-    await tester.drag(find.byType(ListView).first, const Offset(0, -900));
+    await tester.drag(
+      find.byKey(const Key('library-song-scroll')),
+      const Offset(0, -900),
+    );
     await tester.pumpAndSettle();
     final searchField = find.byKey(const Key('library-search'));
     expect(searchField, findsOneWidget);
@@ -319,6 +324,8 @@ void main() {
   testWidgets('left swipe adds to Up next or plays when idle', (tester) async {
     await controller.initialize();
     await tester.pumpWidget(PocketMusicApp(controller: controller));
+    await tester.ensureVisible(find.byKey(const Key('song-b')));
+    await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('song-b')), const Offset(-350, 0));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 20));
@@ -327,12 +334,17 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const Key('song-c')),
       150,
-      scrollable: find.descendant(
-        of: find.byType(ListView).first,
-        matching: find.byType(Scrollable),
-      ).first,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('library-song-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
-    await tester.drag(find.byType(ListView).first, const Offset(0, -180));
+    await tester.drag(
+      find.byKey(const Key('library-song-scroll')),
+      const Offset(0, -180),
+    );
     await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('song-c')), const Offset(-350, 0));
     await tester.pumpAndSettle();

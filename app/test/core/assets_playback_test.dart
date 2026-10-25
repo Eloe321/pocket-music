@@ -107,6 +107,17 @@ void main() {
     await native('player.next', null);
     expect(next, 1);
   });
+  test(
+    'explicit remote play and pause preserve intent instead of toggling',
+    () async {
+      await adapter.open(local, autoStart: true, position: Duration.zero);
+      calls.clear();
+      await native('player.play', null);
+      await native('player.pause', null);
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.map((call) => call.method), ['play', 'pause']);
+    },
+  );
   test('native position and completion feed controller events', () async {
     final events = <PlaybackEvent>[];
     final subscription = adapter.changes.listen(events.add);
@@ -126,16 +137,21 @@ void main() {
     await subscription.cancel();
   });
   test(
-    'completion is emitted after the old native player has stopped',
+    'queue completion keeps native service alive for the next song',
     () async {
       final atCompletion = <String>[];
       final subscription = adapter.changes.listen((event) {
-        if (event.completed) atCompletion.add(calls.last.method);
+        if (event.completed) {
+          atCompletion.add(
+            calls.any((call) => call.method == 'stop') ? 'stopped' : 'retained',
+          );
+        }
       });
       await adapter.open(local, autoStart: true, position: Duration.zero);
       await native('player.current', {'totalDurationMs': 90000});
       await native('player.finished', null);
-      expect(atCompletion, ['stop']);
+      expect(atCompletion, ['retained']);
+      expect(calls.where((call) => call.method == 'stop'), isEmpty);
       await subscription.cancel();
     },
   );

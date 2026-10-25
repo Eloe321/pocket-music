@@ -26,10 +26,12 @@ object MediaControlRouter {
         next: () -> Unit,
         previous: () -> Unit,
         stop: () -> Unit,
+        play: (() -> Unit)? = null,
+        pause: (() -> Unit)? = null,
     ) {
         when (action) {
-            Action.PLAY -> if (!isPlaying) toggle()
-            Action.PAUSE -> if (isPlaying) toggle()
+            Action.PLAY -> if (play != null) play() else if (!isPlaying) toggle()
+            Action.PAUSE -> if (pause != null) pause() else if (isPlaying) toggle()
             Action.TOGGLE -> toggle()
             Action.NEXT -> next()
             Action.PREVIOUS -> previous()

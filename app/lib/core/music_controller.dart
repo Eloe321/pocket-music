@@ -40,6 +40,8 @@ class MusicController extends ChangeNotifier {
     );
     if (playback is RemotePlaybackPort) {
       (playback as RemotePlaybackPort).bindRemoteControls(
+        play: play,
+        pause: pause,
         next: next,
         previous: previous,
         toggle: togglePlayPause,
@@ -551,7 +553,12 @@ class MusicController extends ChangeNotifier {
       newCycle = true;
     }
     if (nextIndex == null) {
-      await _pause();
+      if (completed) {
+        await _playback.stop();
+        _isPlaying = false;
+      } else {
+        await _pause();
+      }
       _position = Duration.zero;
       if (_loaded) await _playback.seek(Duration.zero);
       return;

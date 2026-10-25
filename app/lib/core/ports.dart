@@ -56,6 +56,8 @@ abstract class StateStore {
 /// Optional notification controls; the app owns queue order and repeat behavior.
 abstract class RemotePlaybackPort {
   void bindRemoteControls({
+    Future<void> Function()? play,
+    Future<void> Function()? pause,
     required Future<void> Function() next,
     required Future<void> Function() previous,
     required Future<void> Function() toggle,

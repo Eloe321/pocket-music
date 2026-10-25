@@ -43,6 +43,7 @@ class FakePlayback implements PlaybackPort {
   bool emitZeroOnOpen = false;
   int active = 0;
   int maxActive = 0;
+  int stopCalls = 0;
   @override
   Stream<PlaybackEvent> get changes => events.stream;
   @override
@@ -76,6 +77,7 @@ class FakePlayback implements PlaybackPort {
 
   @override
   Future<void> stop() async {
+    stopCalls++;
     playing = false;
   }
 
@@ -443,6 +445,20 @@ void main() {
     expect(controller.displayQueue[1].song.id, 'a');
     await controller.next();
     expect(controller.currentSong?.id, 'a');
+  });
+  test('natural handoff retains service until the queue really ends', () async {
+    await controller.initialize();
+    await controller.playQueue(library.songs, startIndex: 1);
+    playback.events.add(const PlaybackEvent(completed: true));
+    await controller.saveState();
+    expect(controller.currentSong?.id, 'c');
+    expect(controller.isPlaying, isTrue);
+    expect(playback.stopCalls, 0);
+
+    playback.events.add(const PlaybackEvent(completed: true));
+    await controller.saveState();
+    expect(controller.isPlaying, isFalse);
+    expect(playback.stopCalls, 1);
   });
   test(
     'repeat one replays completed track and shuffle avoids same track',

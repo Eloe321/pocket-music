@@ -1,7 +1,7 @@
 name: pocket_music
 description: A private offline music library for Android and iPhone.
 publish_to: none
-version: 0.1.1+2
+version: 0.1.2+3
 environment:
   sdk: '>=3.11.0 <4.0.0'
   flutter: '>=3.47.0'

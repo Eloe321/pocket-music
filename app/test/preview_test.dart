@@ -100,6 +100,14 @@ void main() {
     }
 
     await screenshot('pocket-music-library.png');
+    final letter = find.byKey(const Key('alphabet-S'));
+    final finger = await tester.startGesture(tester.getCenter(letter));
+    await tester.pump();
+    expect(find.byKey(const Key('alphabet-bubble')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await screenshot('pocket-music-alphabet.png');
+    await finger.up();
+    await tester.pump();
     final mini = tester.getRect(find.byKey(const Key('mini-player')));
     await tester.tapAt(mini.topLeft + const Offset(30, 30));
     await tester.pumpAndSettle();

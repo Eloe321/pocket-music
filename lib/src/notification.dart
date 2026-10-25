@@ -36,6 +36,8 @@ class NotificationSettings {
 
   /// null for default behavior
   final NotificationAction? customPlayPauseAction;
+  final NotificationAction? customPlayAction;
+  final NotificationAction? customPauseAction;
 
   /// null for default behavior
   final NotificationAction? customPrevAction;
@@ -63,6 +65,8 @@ class NotificationSettings {
     this.seekBarEnabled = true,
     this.customNextAction,
     this.customPlayPauseAction,
+    this.customPlayAction,
+    this.customPauseAction,
     this.customPrevAction,
     this.customStopAction,
     this.customNextIcon,

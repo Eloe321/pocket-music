@@ -5,6 +5,19 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MediaControlRouterTest {
+    @Test fun explicitCommandsRemainExplicitWhenBackendStateIsTransient() {
+        val commands = mutableListOf<String>()
+        for (action in listOf(MediaControlRouter.Action.PLAY, MediaControlRouter.Action.PAUSE)) {
+            MediaControlRouter.dispatch(
+                action, isPlaying = false,
+                toggle = { commands.add("toggle") },
+                next = {}, previous = {}, stop = {},
+                play = { commands.add("play") }, pause = { commands.add("pause") },
+            )
+        }
+        assertEquals(listOf("play", "pause"), commands)
+    }
+
     @Test fun headsetAndPhoneMediaKeysMapToPlaybackActions() {
         assertEquals(MediaControlRouter.Action.TOGGLE,
             MediaControlRouter.actionForKeyCode(KeyEvent.KEYCODE_HEADSETHOOK))

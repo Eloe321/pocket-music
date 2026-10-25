@@ -64,6 +64,8 @@ class Player(
     var onPrev: (() -> Unit)? = null
     var onStop: (() -> Unit)? = null
     var onNotificationPlayOrPause: (() -> Unit)? = null
+    var onNotificationPlay: (() -> Unit)? = null
+    var onNotificationPause: (() -> Unit)? = null
     var onNotificationStop: (() -> Unit)? = null
     //endregion
 
@@ -80,6 +82,10 @@ class Player(
     val isPlaying: Boolean
         get() = mediaPlayer != null && mediaPlayer!!.isPlaying
 
+    private var playbackRequested = false
+    val isPlaybackActive: Boolean
+        get() = playbackRequested
+
     private var lastRingerMode: Int? = null //see https://developer.android.com/reference/android/media/AudioManager.html?hl=fr#getRingerMode()
 
     private var displayNotification = false
@@ -92,14 +98,12 @@ class Player(
     private var notificationSettings: NotificationSettings? = null
 
     private var _lastPositionMs: Long? = null
-    private val updatePosition = object : Runnable {
-        override fun run() {
+    private val positionTicker = PlaybackPositionTicker(
+        post = { runnable, delay -> handler.postDelayed(runnable, delay); Unit },
+        cancel = { handler.removeCallbacks(it) },
+        update = {
             mediaPlayer?.let { mediaPlayer ->
                 try {
-                    if (!mediaPlayer.isPlaying) {
-                        handler.removeCallbacks(this)
-                    }
-
                     val positionMs : Long = mediaPlayer.currentPositionMs
 
                     if(_lastPositionMs != positionMs) {
@@ -123,14 +127,12 @@ class Player(
                     }
                     updateNotifPosition()
 
-                    // Update every 300ms.
-                    handler.postDelayed(this, 300)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
-        }
-    }
+        },
+    )
 
     fun next() {
         this.onNext?.invoke()
@@ -173,6 +175,10 @@ class Player(
         }
 
         this.displayNotification = displayNotification
+        playbackRequested = autoStart
+        _positionMs = 0
+        _durationMs = 0
+        _lastPositionMs = null
         this.audioMetas = audioMetas
         this.notificationSettings = notificationSettings
         this.respectSilentMode = respectSilentMode
@@ -192,6 +198,7 @@ class Player(
                         networkHeaders = networkHeaders,
                         context = context,
                         onFinished = {
+                            positionTicker.stop()
                             stopWhenCall.stop()
                             onFinished?.invoke()
                         },
@@ -229,6 +236,8 @@ class Player(
                 }
                 result.success(null)
             } catch (error: Throwable) {
+                playbackRequested = false
+                positionTicker.stop()
                 error.printStackTrace()
                 if(error is PlayerFinder.NoPlayerFoundException && error.why != null){
                     result.error("OPEN", error.why.message, mapOf(
@@ -243,6 +252,8 @@ class Player(
     }
 
     fun stop(pingListener: Boolean = true, removeNotification: Boolean = true) {
+        playbackRequested = false
+        positionTicker.stop()
         mediaPlayer?.apply {
             // Reset duration and position.
             // handler.removeCallbacks(updatePosition);
@@ -252,7 +263,6 @@ class Player(
             mediaPlayer?.stop()
             mediaPlayer?.release()
             onPlaying?.invoke(false)
-            handler.removeCallbacks(updatePosition)
         }
         if (forwardHandler != null) {
             forwardHandler!!.stop()
@@ -290,7 +300,7 @@ class Player(
                 ?.let { audioMetas ->
                     NotificationService.updatePosition(
                             context = context,
-                            isPlaying = isPlaying,
+                            isPlaying = isPlaybackActive,
                             speed = this.playSpeed.toFloat(),
                             currentPositionMs = _positionMs
                     )
@@ -331,7 +341,7 @@ class Player(
                 notificationManager.showNotification(
                         playerId = id,
                         audioMetas = audioMetas,
-                        isPlaying = this.isPlaying,
+                        isPlaying = this.isPlaybackActive,
                         notificationSettings = notificationSettings,
                         stop = removeNotificationOnStop && mediaPlayer == null,
                         durationMs = this._durationMs
@@ -359,9 +369,10 @@ class Player(
         if (isEnabledToPlayPause) { //can be disabled while recieving phone call
             mediaPlayer?.let { player ->
                 stopForward()
+                playbackRequested = true
                 player.play()
                 _lastPositionMs = null
-                handler.post(updatePosition)
+                positionTicker.start()
                 onPlaying?.invoke(true)
                 updateNotif()
             }
@@ -372,9 +383,10 @@ class Player(
 
     fun pause() {
         if (isEnabledToPlayPause) {
+            playbackRequested = false
+            positionTicker.stop()
             mediaPlayer?.let {
                 it.pause()
-                handler.removeCallbacks(updatePosition)
 
                 stopForward()
                 onPlaying?.invoke(false)
@@ -391,7 +403,11 @@ class Player(
         mediaPlayer?.apply {
             val to = max(milliseconds, 0L)
             seekTo(to)
-            onPositionMSChanged?.invoke(currentPositionMs)
+            // Publish the requested seek immediately, including while paused.
+            _positionMs = if (_durationMs > 0) min(to, _durationMs) else to
+            _lastPositionMs = null
+            onPositionMSChanged?.invoke(_positionMs)
+            updateNotifPosition()
         }
     }
 
@@ -506,6 +522,9 @@ class Player(
         this.onNotificationPlayOrPause?.invoke()
     }
 
+    fun askPlay() { onNotificationPlay?.invoke() }
+    fun askPause() { onNotificationPause?.invoke() }
+
     fun askStop() {
         this.onNotificationStop?.invoke()
     }
@@ -515,8 +534,8 @@ class Player(
             when(this.headsetStrategy){
                 HeadsetStrategy.pauseOnUnplug -> { /* do nothing */}
                 HeadsetStrategy.pauseOnUnplugPlayOnPlug -> {
-                    if(!isPlaying) {
-                        this.onNotificationPlayOrPause?.invoke()
+                    if(!isPlaybackActive) {
+                        askPlay()
                     }
                 }
                 else -> { /* do nothing */ }
@@ -524,8 +543,8 @@ class Player(
         } else {
             when(this.headsetStrategy){
                 HeadsetStrategy.pauseOnUnplug, HeadsetStrategy.pauseOnUnplugPlayOnPlug  -> {
-                    if(isPlaying) {
-                        this.onNotificationPlayOrPause?.invoke()
+                    if(isPlaybackActive) {
+                        askPause()
                     }
                 }
                 else -> { /* do nothing */ }

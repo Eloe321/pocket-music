@@ -10,6 +10,9 @@ import 'platform_library.dart' show isLocalMediaPath;
 class AssetsPlayback implements PlaybackPort, RemotePlaybackPort {
   AssetsPlayback({AssetsAudioPlayer? player})
     : _player = player ?? AssetsAudioPlayer.newPlayer() {
+    // Keep Android's foreground service alive between app-owned queue items.
+    // The controller explicitly stops it when the queue has no next song.
+    _player.autoStopAtPlaylistEnd = false;
     _subscriptions.add(
       _player.isPlaying.listen((playing) {
         if (_hasTrack && !_opening) _emit(PlaybackEvent(isPlaying: playing));
@@ -41,7 +44,7 @@ class AssetsPlayback implements PlaybackPort, RemotePlaybackPort {
   final AssetsAudioPlayer _player;
   final _events = StreamController<PlaybackEvent>.broadcast(sync: true);
   final _subscriptions = <StreamSubscription<dynamic>>[];
-  Future<void> Function()? _next, _previous, _toggle, _stop;
+  Future<void> Function()? _next, _previous, _toggle, _stop, _play, _pause;
   bool _disposed = false, _opening = false, _hasTrack = false;
   Object? _openingError;
 
@@ -67,11 +70,15 @@ class AssetsPlayback implements PlaybackPort, RemotePlaybackPort {
 
   @override
   void bindRemoteControls({
+    Future<void> Function()? play,
+    Future<void> Function()? pause,
     required Future<void> Function() next,
     required Future<void> Function() previous,
     required Future<void> Function() toggle,
     required Future<void> Function() stop,
   }) {
+    _play = play;
+    _pause = pause;
     _next = next;
     _previous = previous;
     _toggle = toggle;
@@ -126,6 +133,8 @@ class AssetsPlayback implements PlaybackPort, RemotePlaybackPort {
           customNextAction: (_) => _remote(_next, () async {}),
           customPrevAction: (_) => _remote(_previous, () async {}),
           customPlayPauseAction: (_) => _remote(_toggle, _player.playOrPause),
+          customPlayAction: (_) => _remote(_play, _player.play),
+          customPauseAction: (_) => _remote(_pause, _player.pause),
           customStopAction: (_) => _remote(_stop, _player.stop),
         ),
       );

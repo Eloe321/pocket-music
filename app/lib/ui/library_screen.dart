@@ -6,6 +6,7 @@ import 'music_theme.dart';
 import 'song_widgets.dart';
 import 'now_playing.dart';
 import 'playlist_song_picker.dart';
+import 'indexed_song_list.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key, required this.controller});
@@ -19,6 +20,7 @@ class _LibraryScreenState extends State<LibraryScreen>
   int destination = 0;
   int category = 0;
   final search = TextEditingController();
+  List<Song> _sourceSongs = [], _orderedSongs = [];
   MusicController get c => widget.controller;
   @override
   void initState() {
@@ -49,9 +51,25 @@ class _LibraryScreenState extends State<LibraryScreen>
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: c,
     builder: (context, _) {
-      final visible = destination == 1
-          ? c.filteredSongs.where((s) => c.favorites.contains(s.id)).toList()
-          : c.filteredSongs;
+      final source = c.songs;
+      if (!sameSongInstances(source, _sourceSongs)) {
+        _sourceSongs = source;
+        _orderedSongs = alphabetizeSongs(source);
+      }
+      final favorites = c.favorites;
+      final parent = destination == 1
+          ? _orderedSongs.where((song) => favorites.contains(song.id)).toList()
+          : _orderedSongs;
+      final query = c.searchQuery.trim().toLowerCase();
+      final visible = query.isEmpty
+          ? parent
+          : parent
+                .where(
+                  (song) => '${song.title} ${song.artist} ${song.album}'
+                      .toLowerCase()
+                      .contains(query),
+                )
+                .toList();
       return Scaffold(
         appBar: AppBar(
           title: const Row(
@@ -59,9 +77,14 @@ class _LibraryScreenState extends State<LibraryScreen>
             children: [
               Icon(Icons.album_rounded, color: copper),
               SizedBox(width: 10),
-              Text(
-                'Pocket Music',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 19),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Pocket Music',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 19),
+                  ),
+                ),
               ),
             ],
           ),
@@ -151,150 +174,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () => c.scan(requestPermission: false),
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: 16),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    [
-                                      'Your library',
-                                      'Your favorites',
-                                      'Your playlists',
-                                    ][destination],
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.headlineLarge,
-                                  ),
-                                ),
-                              ),
-                              if (destination == 2) ...[
-                                const SizedBox(width: 12),
-                                IconButton.filledTonal(
-                                  tooltip: 'Create playlist',
-                                  onPressed: () async {
-                                    final name = await playlistName(context);
-                                    if (name != null) {
-                                      await c.createPlaylist(name);
-                                    }
-                                  },
-                                  icon: const Icon(Icons.add_rounded),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            destination == 2
-                                ? '${c.playlists.length} playlists · saved on this phone'
-                                : '${destination == 1 ? c.songs.where((s) => c.favorites.contains(s.id)).length : c.songs.length} songs · all yours',
-                            style: const TextStyle(color: muted),
-                          ),
-                          const SizedBox(height: 22),
-                          if (destination == 0)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                children: [
-                                  for (var i = 0; i < 3; i++)
-                                    ChoiceChip(
-                                      label: Text(
-                                        ['Songs', 'Albums', 'Artists'][i],
-                                      ),
-                                      selected: category == i,
-                                      onSelected: (_) =>
-                                          setState(() => category = i),
-                                    ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (destination == 2)
-                      ..._playlists(context)
-                    else if (c.songs.isEmpty)
-                      _emptyLibrary(context)
-                    else if (visible.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 28,
-                          vertical: 48,
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              destination == 1
-                                  ? Icons.favorite_border
-                                  : Icons.search_off,
-                              color: muted,
-                              size: 42,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              c.searchQuery.isNotEmpty
-                                  ? 'No songs match your search.'
-                                  : 'Keep your favorites close.',
-                              style: Theme.of(context).textTheme.titleLarge,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              c.searchQuery.isNotEmpty
-                                  ? 'Try a song title, artist, or album.'
-                                  : 'Open a song’s menu and add it to favorites.',
-                              style: const TextStyle(color: muted),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      )
-                    else ...[
-                      if (c.permissionDenied && destination == 0)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 8,
-                          ),
-                          child: Card(
-                            color: panel,
-                            child: ListTile(
-                              title: const Text('Showing saved music'),
-                              subtitle: const Text(
-                                'Allow audio access to refresh device songs.',
-                              ),
-                              trailing: TextButton(
-                                onPressed: () => c.scan(),
-                                child: const Text('Allow'),
-                              ),
-                            ),
-                          ),
-                        ),
-                      if (destination == 1 || category == 0) ...[
-                        _playActions(visible),
-                        for (final song in visible)
-                          SongTile(
-                            song: song,
-                            controller: c,
-                            collection: visible,
-                          ),
-                      ] else
-                        ..._groups(context, visible),
-                    ],
-                  ],
-                ),
+                child: _libraryBody(context, visible, parent),
               ),
             ),
           ],
@@ -334,29 +214,186 @@ class _LibraryScreenState extends State<LibraryScreen>
     },
   );
 
+  Widget _libraryBody(
+    BuildContext context,
+    List<Song> visible,
+    List<Song> parent,
+  ) {
+    final header = <Widget>[
+      Padding(
+        padding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      [
+                        'Your library',
+                        'Your favorites',
+                        'Your playlists',
+                      ][destination],
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                  ),
+                ),
+                if (destination == 2) ...[
+                  const SizedBox(width: 12),
+                  IconButton.filledTonal(
+                    tooltip: 'Create playlist',
+                    onPressed: () async {
+                      final name = await playlistName(context);
+                      if (name != null) {
+                        await c.createPlaylist(name);
+                      }
+                    },
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              destination == 2
+                  ? '${c.playlists.length} playlists · saved on this phone'
+                  : '${parent.length} songs · all yours',
+              style: const TextStyle(color: muted),
+            ),
+            const SizedBox(height: 22),
+            if (destination == 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (var i = 0; i < 3; i++)
+                      ChoiceChip(
+                        label: Text(['Songs', 'Albums', 'Artists'][i]),
+                        selected: category == i,
+                        onSelected: (_) => setState(() => category = i),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+      if (destination == 2)
+        ..._playlists(context)
+      else if (c.songs.isEmpty)
+        _emptyLibrary(context)
+      else if (visible.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
+          child: Column(
+            children: [
+              Icon(
+                destination == 1 ? Icons.favorite_border : Icons.search_off,
+                color: muted,
+                size: 42,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                c.searchQuery.isNotEmpty
+                    ? 'No songs match your search.'
+                    : 'Keep your favorites close.',
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                c.searchQuery.isNotEmpty
+                    ? 'Try a song title, artist, or album.'
+                    : 'Open a song’s menu and add it to favorites.',
+                style: const TextStyle(color: muted),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        )
+      else ...[
+        if (c.permissionDenied && destination == 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Card(
+              color: panel,
+              child: ListTile(
+                title: const Text('Showing saved music'),
+                subtitle: const Text(
+                  'Allow audio access to refresh device songs.',
+                ),
+                trailing: TextButton(
+                  onPressed: () => c.scan(),
+                  child: const Text('Allow'),
+                ),
+              ),
+            ),
+          ),
+        if (destination == 1 || category == 0) ...[
+          _playActions(parent),
+        ] else
+          ..._groups(context, visible),
+      ],
+    ];
+    if (destination != 2 &&
+        visible.isNotEmpty &&
+        (destination == 1 || category == 0)) {
+      return IndexedSongList(
+        key: ValueKey('songs-$destination'),
+        scrollKey: const Key('library-song-scroll'),
+        controller: c,
+        songs: visible,
+        collection: parent,
+        showAlphabet: destination == 0 && c.searchQuery.trim().isEmpty,
+        header: Column(children: header),
+      );
+    }
+    return ListView(
+      key: const Key('library-song-scroll'),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(bottom: 16),
+      children: header,
+    );
+  }
+
   Widget _playActions(List<Song> songs) => Padding(
     padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-    child: Row(
-      children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: () => c.playQueue(songs),
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Play all'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              if (!c.shuffleEnabled) await c.toggleShuffle();
-              await c.playQueue(songs);
-            },
-            icon: const Icon(Icons.shuffle_rounded),
-            label: const Text('Shuffle'),
-          ),
-        ),
-      ],
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final play = FilledButton.icon(
+          onPressed: () => c.playQueue(songs),
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text('Play all'),
+        );
+        final shuffle = OutlinedButton.icon(
+          onPressed: () async {
+            if (!c.shuffleEnabled) await c.toggleShuffle();
+            await c.playQueue(songs);
+          },
+          icon: const Icon(Icons.shuffle_rounded),
+          label: const Text('Shuffle'),
+        );
+        final minimumButtonWidth =
+            MediaQuery.textScalerOf(context).scale(14) * 5 + 72;
+        if (constraints.maxWidth < minimumButtonWidth * 2 + 12) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [play, const SizedBox(height: 8), shuffle],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: play),
+            const SizedBox(width: 12),
+            Expanded(child: shuffle),
+          ],
+        );
+      },
     ),
   );
 
@@ -409,13 +446,17 @@ class _LibraryScreenState extends State<LibraryScreen>
   );
 
   List<Widget> _groups(BuildContext context, List<Song> songs) {
+    final visibleNames = songs
+        .map((song) => category == 1 ? song.album : song.artist)
+        .toSet();
     final groups = <String, List<Song>>{};
-    for (final song in songs) {
+    for (final song in _orderedSongs) {
       groups
           .putIfAbsent(category == 1 ? song.album : song.artist, () => [])
           .add(song);
     }
     return groups.entries
+        .where((entry) => visibleNames.contains(entry.key))
         .map(
           (entry) => ListTile(
             contentPadding: const EdgeInsets.symmetric(
@@ -496,7 +537,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             .toList();
 }
 
-class CollectionPage extends StatelessWidget {
+class CollectionPage extends StatefulWidget {
   const CollectionPage({
     super.key,
     required this.controller,
@@ -509,6 +550,23 @@ class CollectionPage extends StatelessWidget {
   final List<Song> songs;
   final String? playlistId;
   @override
+  State<CollectionPage> createState() => _CollectionPageState();
+}
+
+class _CollectionPageState extends State<CollectionPage> {
+  final search = TextEditingController();
+  String query = '';
+  MusicController get controller => widget.controller;
+  String get title => widget.title;
+  String? get playlistId => widget.playlistId;
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
     builder: (context, _) {
@@ -516,9 +574,20 @@ class CollectionPage extends StatelessWidget {
       final list = c.playlists
           .where((list) => list.id == playlistId)
           .firstOrNull;
+      final collectionIds = widget.songs.map((song) => song.id).toSet();
       final collection = playlistId == null
-          ? songs.where((song) => c.songs.contains(song)).toList()
+          ? c.songs.where((song) => collectionIds.contains(song.id)).toList()
           : c.songsForPlaylist(playlistId!);
+      final searchQuery = query.trim().toLowerCase();
+      final visible = searchQuery.isEmpty
+          ? collection
+          : collection
+                .where(
+                  (song) => '${song.title} ${song.artist} ${song.album}'
+                      .toLowerCase()
+                      .contains(searchQuery),
+                )
+                .toList();
       return Scaffold(
         appBar: AppBar(
           title: Text(list?.name ?? title),
@@ -572,68 +641,116 @@ class CollectionPage extends StatelessWidget {
               ),
           ],
         ),
-        body: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
+        body: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                children: [
-                  CoverArt(song: collection.firstOrNull, size: 170),
-                  const SizedBox(height: 18),
-                  Text(
-                    '${collection.length} songs',
-                    style: const TextStyle(color: muted),
-                  ),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 12,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: collection.isEmpty
-                            ? null
-                            : () => c.playQueue(collection),
-                        icon: const Icon(Icons.play_arrow_rounded),
-                        label: const Text('Play'),
-                      ),
-                      if (list != null)
-                        OutlinedButton.icon(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => PlaylistSongPicker(
-                                controller: c,
-                                playlistId: list.id,
-                              ),
-                            ),
-                          ),
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('Add songs'),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
+              child: TextField(
+                key: const Key('collection-search'),
+                controller: search,
+                onChanged: (value) => setState(() => query = value),
+                decoration: InputDecoration(
+                  hintText: 'Search this collection',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            search.clear();
+                            setState(() => query = '');
+                          },
                         ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (collection.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Use Add songs to build this playlist.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: muted),
                 ),
               ),
-            for (final song in collection)
-              SongTile(
-                song: song,
+            ),
+            Expanded(
+              child: IndexedSongList(
+                scrollKey: const Key('collection-song-scroll'),
                 controller: c,
+                songs: visible,
                 collection: collection,
                 onRemove: list == null
                     ? null
-                    : () => c.removeFromPlaylist(list.id, song.id),
+                    : (song) => c.removeFromPlaylist(list.id, song.id),
+                header: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        children: [
+                          CoverArt(song: collection.firstOrNull, size: 170),
+                          const SizedBox(height: 18),
+                          Text(
+                            '${collection.length} songs',
+                            style: const TextStyle(color: muted),
+                          ),
+                          const SizedBox(height: 18),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 12,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: collection.isEmpty
+                                    ? null
+                                    : () => c.playQueue(collection),
+                                icon: const Icon(Icons.play_arrow_rounded),
+                                label: const Text('Play'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: collection.isEmpty
+                                    ? null
+                                    : () async {
+                                        if (!c.shuffleEnabled) {
+                                          await c.toggleShuffle();
+                                        }
+                                        await c.playQueue(collection);
+                                      },
+                                icon: const Icon(Icons.shuffle_rounded),
+                                label: const Text('Shuffle'),
+                              ),
+                              if (list != null)
+                                OutlinedButton.icon(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => PlaylistSongPicker(
+                                        controller: c,
+                                        playlistId: list.id,
+                                      ),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.add_rounded),
+                                  label: const Text('Add songs'),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (collection.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Use Add songs to build this playlist.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: muted),
+                        ),
+                      ),
+                    if (collection.isNotEmpty && visible.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'No songs match your search.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: muted),
+                        ),
+                      ),
+                  ],
+                ),
               ),
+            ),
           ],
         ),
         bottomNavigationBar: SafeArea(
