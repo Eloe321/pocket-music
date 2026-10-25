@@ -36,4 +36,4 @@ Target: Realme RMX3363, Android 13. Installed as an update with existing music a
 - Searching a two-song playlist and selecting one match retained both playlist songs in the queue.
 - Tapping M jumped to the M songs; holding M showed the enlarged letter to the left of the finger. Search stayed at the top.
 
-A longer phone-side playback run is being collected. A user-confirmed manual pause interrupted the first 15-minute interval; that pause is not counted as an application failure. No completed two-hour hardware pass is claimed by these initial results. The phone's USB connection was also removed for calls; the phone-side logger can continue without USB.
+A user-confirmed manual pause interrupted the first 15-minute monitored interval; that pause was not an application failure. USB removal for calls also interrupted logging. The user requested finishing with the checks completed so far, so the extended run was ended and the QA monitors were stopped. No completed two-hour hardware pass is claimed. The real 30–60 minute delayed-stop symptom after resuming remains unverified by an uninterrupted hardware run.
